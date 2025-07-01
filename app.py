@@ -115,6 +115,22 @@ def send_email():
 def list_files():
     return "<br>".join(sorted(os.listdir(RECDIR)))
 
+@app.route("/debug/files")
+def list_files():
+    return "<br>".join(sorted(os.listdir(RECDIR)))
+
+# ---------- Delete file by name --------------------------
+@app.route("/delete/<filename>", methods=["POST"])
+def delete_file(filename):
+    file_path = os.path.join(RECDIR, filename)
+    if not os.path.exists(file_path):
+        return jsonify({"status": "fail", "error": "File not found"}), 404
+    try:
+        os.remove(file_path)
+        return jsonify({"status": "ok", "message": f"{filename} deleted"})
+    except Exception as e:
+        return jsonify({"status": "fail", "error": str(e)}), 500
+
 # ── Local debug run ──────────────────────────────────────
 if __name__ == "__main__":
     app.run(debug=True)
