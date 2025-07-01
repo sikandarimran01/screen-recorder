@@ -69,13 +69,16 @@ def clip(orig):
     out_path  = os.path.join(RECDIR, clip_name)
     duration  = end - start
 
-    cmd = [
-        FFMPEG, "-hide_banner", "-loglevel", "error",
-        "-ss", str(start), "-t", str(duration),
-        "-i", in_path,
-        "-c", "copy",                 # no re‑encode → instant
-        "-y", out_path
-    ]
+  cmd = [
+    FFMPEG, "-hide_banner", "-loglevel", "error",
+    "-ss", str(start),
+    "-t",  str(duration),
+    "-i",  in_path,
+    "-c:v", "libvpx",      # ✅ VP8 for video (WebM-safe)
+    "-c:a", "libvorbis",   # ✅ Vorbis for audio (WebM-safe)
+    "-y",  out_path
+]
+
 
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
