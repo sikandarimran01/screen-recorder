@@ -161,7 +161,7 @@ clipGo.onclick = async () => {
   }).then(r => r.json());
 
 if (res.status === "ok") {
-  const url = `${location.origin}/recordings/${res.clip}`;
+const url = `${location.origin}/recordings/${fileName}`;
   copyToClipboard(url, clipGo, "✅ Clip link copied!");
 
   setTimeout(() => {
