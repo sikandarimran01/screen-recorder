@@ -1,253 +1,98 @@
+from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask_mail import Mail, Message
+from werkzeug.utils import secure_filename
+import os
+import uuid
+import shutil
 
+app = Flask(__name__)
 
+# === Configuration ===
+UPLOAD_FOLDER = os.path.join("static", "recordings")
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-document.addEventListener("DOMContentLoaded", () => {
-  /* ===  Quick DOM helper  === */
-  const $ = (sel) => document.querySelector(sel);
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024  # Max 500MB
+app.config["MAIL_SERVER"] = "smtp.gmail.com"
+app.config["MAIL_PORT"] = 587
+app.config["MAIL_USE_TLS"] = True
+app.config["MAIL_USERNAME"] = "your_email@gmail.com"
+app.config["MAIL_PASSWORD"] = "your_password"
+app.config["MAIL_DEFAULT_SENDER"] = app.config["MAIL_USERNAME"]
 
-  /* ===  Grab elements  === */
-  const copySecure     = $("#copySecure");  // 🔒 15‑min link
-  const copyPublic     = $("#copyPublic");  // 🌐 permanent link
-  const disablePublic  = $("#disablePublic");
+mail = Mail(app)
 
-  const startBtn  = $("#startBtn");
-  const stopBtn   = $("#stopBtn");
-  const statusMsg = $("#statusMsg");
-  const preview   = $("#preview");
+# === Routes ===
+@app.route("/")
+def index():
+    return render_template("index.html")
 
-  const shareWrap = $("#shareWrap");
-  const copyLinkBtn = $("#copyLink");
+@app.route("/upload", methods=["POST"])
+def upload():
+    if "video" not in request.files:
+        return jsonify({"status": "error", "error": "No video file"})
+    
+    file = request.files["video"]
+    if file.filename == "":
+        return jsonify({"status": "error", "error": "Empty filename"})
 
-  const shareEmail = $("#shareEmail");
-  const emailDlg   = $("#emailModal");
-  const emailInput = $("#emailTo");
-  const emailSend  = $("#emailSend");
-  const emailClose = $("#emailClose");
-  const emailStatus = $("#emailStatus");
+    filename = secure_filename(f"{uuid.uuid4().hex}.webm")
+    filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    file.save(filepath)
+    return jsonify({"status": "ok", "filename": filename})
 
-  const openClip  = $("#openClip");
-  const clipPanel = $("#clipPanel");
-  const clipGo    = $("#clipGo");
-  const clipCancel = $("#clipCancel");
+@app.route("/recordings/<filename>")
+def serve_recording(filename):
+    return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
-  const openEmbed  = $("#openEmbed");
-  const embedDlg   = $("#embedModal");
-  const embedWidth = $("#embedWidth");
-  const embedHeight = $("#embedHeight");
-  const embedBox   = $("#embedCode");
-  const embedCopy  = $("#embedCopy");
-  const embedClose = $("#embedClose");
+@app.route("/send_email", methods=["POST"])
+def send_email():
+    data = request.get_json()
+    to = data.get("to")
+    url = data.get("url")
+    if not to or not url:
+        return jsonify({"status": "error", "error": "Missing email or URL"})
+    
+    try:
+        msg = Message("Your Screen Recording", recipients=[to])
+        msg.body = f"Here is your screen recording: {url}"
+        mail.send(msg)
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)})
 
-  /* ===  Helpers  === */
-  const isLocal  = ["localhost", "127.0.0.1"].includes(location.hostname);
-  const REC_BASE = isLocal ? "/static/recordings/" : "/recordings/";
-  const fullUrl  = (fname) => `${location.origin}${REC_BASE}${fname}`;
+@app.route("/clip/<filename>", methods=["POST"])
+def clip(filename):
+    data = request.get_json()
+    start = int(data.get("start", 0))
+    end = int(data.get("end", 0))
 
-  let mediaRecorder;          // MediaRecorder instance
-  let chunks = [];            // recorded Blob chunks
-  let fileName = "";          // set after upload
+    original_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    if not os.path.exists(original_path):
+        return jsonify({"status": "error", "error": "Original file not found"})
 
-  /* ==========  Screen‑record controls  ========== */
-  startBtn.onclick = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: true,
-      });
-      mediaRecorder = new MediaRecorder(stream);
-      chunks = [];
+    # Simulate clipping by copying the original (implement real FFmpeg later)
+    new_filename = f"clip_{uuid.uuid4().hex}.webm"
+    new_path = os.path.join(app.config["UPLOAD_FOLDER"], new_filename)
+    shutil.copyfile(original_path, new_path)
 
-      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+    return jsonify({"status": "ok", "filename": new_filename})
 
-      mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: "video/webm" });
-        const fd = new FormData();
-        fd.append("video", blob, "recording.webm");
+@app.route("/link/secure/<filename>")
+def secure_link(filename):
+    # Simulate secure link (15-min link)
+    url = request.host_url + f"recordings/{filename}"
+    return jsonify({"status": "ok", "url": url})
 
-        statusMsg.textContent = "⏫ Uploading…";
-        const res = await fetch("/upload", { method: "POST", body: fd }).then((r) => r.json());
+@app.route("/link/public/<filename>", methods=["GET", "DELETE"])
+def public_link(filename):
+    url = request.host_url + f"recordings/{filename}"
+    if request.method == "GET":
+        return jsonify({"status": "ok", "url": url})
+    elif request.method == "DELETE":
+        return jsonify({"status": "ok"})  # Simulated disabling
+    return jsonify({"status": "error", "error": "Invalid request"})
 
-        if (res.status === "ok") {
-          fileName = res.filename;
-          const url = fullUrl(fileName);
-
-          preview.src = url;
-          preview.classList.remove("hidden");
-          shareWrap.classList.remove("hidden");
-          statusMsg.innerHTML = `✅ Saved <a href="${url}" download>Download</a>`;
-        } else {
-          alert("❌ Upload failed");
-        }
-        startBtn.disabled = false;
-      };
-
-      mediaRecorder.start();
-      statusMsg.textContent = "🎬 Recording…";
-      startBtn.disabled = true;
-      stopBtn.disabled = false;
-    } catch (err) {
-      console.error(err);
-      alert("Screen‑capture permission denied.");
-    }
-  };
-
-  stopBtn.onclick = () => {
-    if (mediaRecorder && mediaRecorder.state === "recording") {
-      mediaRecorder.stop();
-      stopBtn.disabled = true;
-    }
-  };
-
-  /* ==========  Share buttons  ========== */
-
-  // Raw download link
-  copyLinkBtn.onclick = () => {
-    if (!fileName) return alert("⚠ No file to share yet.");
-    copyToClipboard(fullUrl(fileName), copyLinkBtn);
-  };
-
-  // 🔒 Secure link (15 min)
-  copySecure &&
-    (copySecure.onclick = async () => {
-      if (!fileName) return alert("⚠ No file to share yet.");
-      const res = await fetch(`/link/secure/${fileName}`).then((r) => r.json());
-      if (res.status === "ok") {
-        copyToClipboard(res.url, copySecure, "✅ Secure link copied (15 min)");
-      } else {
-        alert("❌ " + res.error);
-      }
-    });
-
-  // 🌐 Public link (permanent)
-  copyPublic &&
-    (copyPublic.onclick = async () => {
-      if (!fileName) return alert("⚠ No file to share yet.");
-      const res = await fetch(`/link/public/${fileName}`).then((r) => r.json());
-      if (res.status === "ok") {
-        copyToClipboard(res.url, copyPublic, "✅ Public link copied");
-      } else {
-        alert("❌ " + res.error);
-      }
-    });
-
-  // ❌ Disable public link
-  disablePublic &&
-    (disablePublic.onclick = async () => {
-      if (!fileName) return alert("⚠ No public link to disable.");
-      const res = await fetch(`/link/public/${fileName}`, { method: "DELETE" }).then((r) => r.json());
-      if (res.status === "ok") {
-        alert("✅ Public link disabled.");
-      } else {
-        alert("❌ " + res.error);
-      }
-    });
-
-  /* ==========  Email modal  ========== */
-  shareEmail.onclick = () => {
-    if (!fileName) return alert("⚠ No recording available.");
-    emailInput.value = "";
-    emailStatus.textContent = "";
-    emailDlg.showModal();
-  };
-  emailClose.onclick = () => emailDlg.close();
-
-  emailSend.onclick = async () => {
-    const to = emailInput.value.trim();
-    if (!to) {
-      emailStatus.textContent = "❌ Please enter a valid e‑mail.";
-      emailStatus.style.color = "var(--danger)";
-      return;
-    }
-    emailSend.disabled = true;
-    emailSend.textContent = "⏳ Sending…";
-
-    try {
-      const res = await fetch("/send_email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to, url: fullUrl(fileName) }),
-      }).then((r) => r.json());
-
-      if (res.status === "ok") {
-        emailStatus.textContent = "✅ Email sent!";
-        emailStatus.style.color = "var(--success)";
-      } else {
-        emailStatus.textContent = "❌ Failed: " + res.error;
-        emailStatus.style.color = "var(--danger)";
-      }
-    } catch {
-      emailStatus.textContent = "❌ Network error.";
-      emailStatus.style.color = "var(--danger)";
-    } finally {
-      emailSend.disabled = false;
-      emailSend.textContent = "📤 Send";
-    }
-  };
-
-  /* ==========  Clip panel  ========== */
-  openClip.onclick = () => {
-    const hidden = clipPanel.classList.toggle("hidden");
-    clipPanel.classList.toggle("fade-in", !hidden);
-  };
-  clipCancel.onclick = () => {
-    clipPanel.classList.add("hidden");
-    clipPanel.classList.remove("fade-in");
-  };
-
-  clipGo.onclick = async () => {
-    const start = +$("#clipStart").value;
-    const end = +$("#clipEnd").value;
-    if (!fileName) return alert("⚠ No recording to clip.");
-    if (start >= end) return alert("⚠ Invalid range.");
-
-    clipGo.disabled = true;
-    clipGo.textContent = "⏳ Cutting…";
-
-    const res = await fetch(`/clip/${fileName}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ start, end }),
-    }).then((r) => r.json());
-
-    if (res.status === "ok") {
-      const url = `${location.origin}/recordings/${fileName}`;
-      copyToClipboard(url, clipGo, "✅ Clip link copied!");
-    } else {
-      alert("❌ Clip failed: " + res.error);
-    }
-    clipGo.disabled = false;
-    clipGo.textContent = "📤 Share Clip";
-  };
-
-  /* ==========  Embed modal  ========== */
-  openEmbed.onclick = () => {
-    if (!fileName) return alert("⚠ No recording to embed.");
-    embedBox.value = makeIframe();
-    embedDlg.showModal();
-  };
-  embedWidth.oninput = embedHeight.oninput = () => (embedBox.value = makeIframe());
-  embedCopy.onclick = () => copyToClipboard(embedBox.value, embedCopy, "✅ Copied!");
-  embedClose.onclick = () => embedDlg.close();
-
-  /* ==========  Helper functions  ========== */
-  function makeIframe() {
-    return `<iframe width="${embedWidth.value}" height="${embedHeight.value}" src="${fullUrl(
-      fileName
-    )}" frameborder="0" allowfullscreen></iframe>`;
-  }
-
-  function copyToClipboard(text, btn, msg = "✅ Copied!") {
-    navigator.clipboard
-      .writeText(text)
-      .then(() => {
-        const prev = btn.textContent;
-        btn.textContent = msg;
-        btn.disabled = true;
-        setTimeout(() => {
-          btn.textContent = prev;
-          btn.disabled = false;
-        }, 2000);
-      })
-      .catch(() => alert("❌ Copy failed"));
-  }
-});
+# === Entry point ===
+if __name__ == "__main__":
+    app.run(debug=True)
