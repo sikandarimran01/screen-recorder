@@ -29,18 +29,25 @@ def index():
 # ── Upload Route ─────────────────────────────────────────
 @app.route("/upload", methods=["POST"])
 def upload():
-    video_file = request.files["video"]
-    fname = datetime.datetime.now().strftime(f"recording_%Y%m%d_%H%M%S.{EXT}")
+    video_file = request.files.get("video")
+    if not video_file:
+        return jsonify({"status": "fail", "error": "No file uploaded"}), 400
+
+    fname = datetime.datetime.now().strftime("recording_%Y%m%d_%H%M%S.webm")
     save_path = os.path.join(RECDIR, fname)
 
     try:
         print("📁 Saving to:", save_path)
         video_file.save(save_path)
     except Exception as e:
+        print("❌ Error saving file:", e)
         return jsonify({"status": "fail", "error": str(e)}), 500
 
-    return jsonify({"status": "ok", "filename": fname, "url": f"/recordings/{fname}"})
-
+    return jsonify({
+        "status":   "ok",
+        "filename": fname,
+        "url":      f"/recordings/{fname}"
+    })
 
 # ── Clip Route ───────────────────────────────────────────
 @app.route("/clip/<orig>", methods=["POST"])
