@@ -77,7 +77,6 @@ def upload():
     except Exception as e:
         return jsonify({"status": "fail", "error": str(e)}), 500
 
-    # Handle token/session
     token = request.cookies.get("magic_token")
     if not token or token not in user_sessions:
         token = uuid.uuid4().hex[:16]
