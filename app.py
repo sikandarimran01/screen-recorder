@@ -112,6 +112,9 @@ def send_email():
     except Exception as e:
         return jsonify({"status": "fail", "error": str(e)}), 500
 
+@app.route("/debug/files")
+def list_files():
+    return "<br>".join(os.listdir(RECDIR))
 
 # ── Local Debug ──────────────────────────────────────────
 if __name__ == "__main__":
