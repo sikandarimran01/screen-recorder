@@ -202,6 +202,10 @@ h1 {
 }
 #shareWrap:hover .dropdown { display: block; }
 
+.dropdown li button:hover {
+  background: rgba(255,255,255,0.05);
+}
+
 /* --- Panels & Dialogs --- */
 .panel { background: var(--card); padding: 1rem; border-radius: var(--radius); margin-top: 1rem; }
 #emailModal input { margin-top: 0.5rem; }
