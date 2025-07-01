@@ -38,26 +38,21 @@
 
 <body>
 <main class="card fade-in">
-
-  <!-- Brand logo and name -->
   <div id="logoBrand">
     <img src="{{ url_for('static', filename='logo.png') }}" alt="GrabScreen Logo" />
   </div>
 
-  <!-- Theme toggle -->
   <button id="themeToggle" class="theme-toggle" title="Toggle Theme">
     <i class="fa-solid"></i>
   </button>
 
   <h1>🖥️ Online Screen Recorder</h1>
-
   <button id="startBtn" class="btn start">▶ Start Recording</button>
   <button id="stopBtn" class="btn stop" disabled>⏹ Stop Recording</button>
 
   <p id="statusMsg"></p>
   <video id="preview" controls class="hidden"></video>
 
-  <!-- Share menu -->
   <div id="shareWrap" class="hidden">
     <button id="shareBtn" class="btn share">📤 Share ▼</button>
     <ul id="shareMenu" class="dropdown">
@@ -69,7 +64,6 @@
     </ul>
   </div>
 
-  <!-- Clip panel -->
   <section id="clipPanel" class="panel hidden">
     <h2>✂ Trim Clip</h2>
     <label>Start (s): <input id="clipStart" type="number" min="0" value="0" /></label>
@@ -78,7 +72,6 @@
     <button id="clipCancel" class="btn cancel">Cancel</button>
   </section>
 
-  <!-- Embed modal -->
   <dialog id="embedModal">
     <h2>📎 Embed Video</h2>
     <label>Width: <input id="embedWidth" type="text" value="100%" /></label>
@@ -88,7 +81,6 @@
     <button id="embedClose" class="btn cancel">Cancel</button>
   </dialog>
 
-  <!-- Email modal -->
   <dialog id="emailModal">
     <h2>📧 Send Recording</h2>
     <label>
@@ -99,33 +91,25 @@
     <div id="emailStatus" style="margin-top:.75rem;font-size:.9rem;"></div>
   </dialog>
 
-  <!-- Magic Link Session History Controls -->
   <div class="session-controls">
-  <button id="resumeBtn"  class="btn hidden">🔄 Resume My Recordings</button>
-  <button id="forgetSession" class="btn cancel hidden">🗑️ Forget My Session</button>
-</div>
-
-<div id="filesPanel" class="panel hidden"></div>
-
-
-  <!-- File history list -->
-  <div id="filesPanel" class="panel hidden">
-    <h2>📝 My Recent Recordings</h2>
-    <ul id="filesList"></ul>
+    <button id="resumeBtn" class="btn hidden">🔄 Resume My Recordings</button>
+    <button id="forgetSession" class="btn cancel hidden">🗑️ Forget My Session</button>
   </div>
 
-  <!-- Footer -->
+  <section id="filesPanel" class="media-grid hidden">
+    <h2>Your Recordings</h2>
+    <div id="mediaGrid" class="grid-container"></div>
+  </section>
+
   <footer class="site-footer">
     <p>© 2025 YourBrand. All rights reserved.</p>
     <p><a href="#">Privacy Policy</a> | <a href="#">Contact</a></p>
   </footer>
 </main>
 
-<!-- JavaScript -->
 <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
 
 <script>
-  // Theme toggle logic
   const themeToggleBtn = document.getElementById('themeToggle');
   const icon = themeToggleBtn.querySelector('i');
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -138,10 +122,8 @@
     localStorage.setItem('theme', theme);
   };
 
-  // Init theme
   setTheme(savedTheme || (prefersDark ? 'dark' : 'light'));
 
-  // Toggle theme
   themeToggleBtn.onclick = () => {
     const current = document.body.classList.contains('dark') ? 'dark' : 'light';
     setTheme(current === 'dark' ? 'light' : 'dark');
