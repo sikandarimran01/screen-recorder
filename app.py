@@ -207,4 +207,5 @@ def delete_file(filename):
         return jsonify({"status": "fail", "error": "File not found"}), 404
     try:
         os.remove(file_path)
-        return jsonify({"status": "
+       return jsonify({"status": "fail", "error": "Some error message"})
+
