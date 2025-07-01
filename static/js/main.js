@@ -2,6 +2,10 @@
 const $ = sel => document.querySelector(sel);
 
 /* =============   Elements   ================ */
+const copySecure     = $('#copySecure');
+const copyPublic     = $('#copyPublic');
+const disablePublic  = $('#disablePublic');
+
 const startBtn    = $('#startBtn');
 const stopBtn     = $('#stopBtn');
 const statusMsg   = $('#statusMsg');
