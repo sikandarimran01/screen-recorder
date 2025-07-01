@@ -1,141 +1,252 @@
 /* ───────────────────────────────────────────────
-   main.js – session‑aware with Resume / Forget
+   main.js  –  full file (replace current version)
    ─────────────────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", () => {
-  /* ----------  tiny helpers  ---------- */
-  const $ = (s) => document.querySelector(s);
-  const copy = (txt, btn, msg = "✅ Copied!") =>
-    navigator.clipboard.writeText(txt).then(() => {
-      const p = btn.textContent;
-      btn.textContent = msg; btn.disabled = true;
-      setTimeout(() => { btn.textContent = p; btn.disabled = false; }, 1800);
-    });
+  /* === Quick DOM helper === */
+  const $ = (sel) => document.querySelector(sel);
 
-  /* ----------  anonymous‑session helper ---------- */
-  const COOKIE = document.cookie.match(/(?:^|;)\s*session=([^;]+)/)?.[1];
-  const LS_KEY = "gs_session";
-  let session  = COOKIE || localStorage.getItem(LS_KEY) || crypto.randomUUID().replace(/-/g,"");
-  if (!COOKIE) localStorage.setItem(LS_KEY, session);
+  /* === Element refs === */
+  const startBtn      = $("#startBtn");
+  const stopBtn       = $("#stopBtn");
+  const statusMsg     = $("#statusMsg");
+  const preview       = $("#preview");
 
-  const apiFetch = (u,o={})=>{
-      o.headers = Object.assign({ "X-Session": session }, o.headers||{});
-      return fetch(u,o).then(r=>{
-          // grab refreshed cookie if server issues one
-          const m=document.cookie.match(/(?:^|;)\s*session=([^;]+)/);
-          if(m){ session=m[1]; localStorage.setItem(LS_KEY,session); }
-          return r;
+  const shareWrap     = $("#shareWrap");
+  const copyLinkBtn   = $("#copyLink");
+  const copySecure    = $("#copySecure");   // 🔒 15‑min link
+  const copyPublic    = $("#copyPublic");   // 🌐 permanent link
+  const disablePublic = $("#disablePublic");
+  const shareEmail    = $("#shareEmail");
+
+  const openClip  = $("#openClip");
+  const clipPanel = $("#clipPanel");
+  const clipGo    = $("#clipGo");
+  const clipCancel = $("#clipCancel");
+
+  const openEmbed  = $("#openEmbed");
+  const embedDlg   = $("#embedModal");
+  const embedWidth = $("#embedWidth");
+  const embedHeight = $("#embedHeight");
+  const embedBox   = $("#embedCode");
+  const embedCopy  = $("#embedCopy");
+  const embedClose = $("#embedClose");
+
+  const emailDlg    = $("#emailModal");
+  const emailInput  = $("#emailTo");
+  const emailSend   = $("#emailSend");
+  const emailClose  = $("#emailClose");
+  const emailStatus = $("#emailStatus");
+
+  /* === Helpers === */
+  const isLocal  = ["localhost", "127.0.0.1"].includes(location.hostname);
+  const REC_BASE = isLocal ? "/static/recordings/" : "/recordings/";
+  const fullUrl  = (fname) => `${location.origin}${REC_BASE}${fname}`;
+
+  let mediaRecorder, chunks = [], fileName = "";
+
+  /* ========== Screen‑record controls ========== */
+  startBtn.onclick = async () => {
+    console.log("🎬 Start button clicked");
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
       });
-  };
+      console.log("✅ Got stream", stream);
 
-  /* ----------  refs ---------- */
-  const startBtn=$("#startBtn"), stopBtn=$("#stopBtn"), statusMsg=$("#statusMsg"), preview=$("#preview");
-  const shareWrap=$("#shareWrap"), copyLinkBtn=$("#copyLink"), copySecure=$("#copySecure"),
-        copyPublic=$("#copyPublic"), disablePublic=$("#disablePublic"), shareEmail=$("#shareEmail");
-  const openClip=$("#openClip"), clipPanel=$("#clipPanel"), clipGo=$("#clipGo"), clipCancel=$("#clipCancel");
-  const openEmbed=$("#openEmbed"), embedDlg=$("#embedModal"), embedWidth=$("#embedWidth"),
-        embedHeight=$("#embedHeight"), embedBox=$("#embedCode"), embedCopy=$("#embedCopy"), embedClose=$("#embedClose");
-  const emailDlg=$("#emailModal"), emailInput=$("#emailTo"), emailSend=$("#emailSend"),
-        emailClose=$("#emailClose"), emailStatus=$("#emailStatus");
-  // NEW:
-  const resumeBtn = document.createElement("button");
-  resumeBtn.id="resumeBtn"; resumeBtn.className="btn"; resumeBtn.textContent="🔄 Resume My Recordings";
-  const forgetBtn = document.createElement("button");
-  forgetBtn.id="forgetSession"; forgetBtn.className="btn cancel"; forgetBtn.textContent="🗑️ Forget My Session";
-  shareWrap.insertAdjacentElement("afterend", resumeBtn);
-  shareWrap.insertAdjacentElement("afterend", forgetBtn);
+      mediaRecorder = new MediaRecorder(stream);
+      chunks = [];
 
-  /* ----------  misc helpers ---------- */
-  const REC_BASE = (["localhost","127.0.0.1"].includes(location.hostname)?"/static/recordings/":"/recordings/");
-  const full = (f)=> `${location.origin}${REC_BASE}${f}`;
+      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
 
-  let mediaRecorder, chunks=[], fileName="", secureUrl="";
+      mediaRecorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: "video/webm" });
+        const fd   = new FormData();
+        fd.append("video", blob, "recording.webm");
 
-  /* ==========  recording  ========== */
-  startBtn.onclick = async ()=>{
-    try{
-      const stream = await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});
-      mediaRecorder=new MediaRecorder(stream); chunks=[];
-      mediaRecorder.ondataavailable=e=>chunks.push(e.data);
-      mediaRecorder.onstop=async()=>{
-        const fd=new FormData(); fd.append("video",new Blob(chunks,{type:"video/webm"}),"rec.webm");
-        statusMsg.textContent="⏫ Uploading…";
-        const r = await apiFetch("/upload",{method:"POST",body:fd}).then(x=>x.json());
-        if(r.status==="ok"){
-          fileName=r.filename; secureUrl=r.url;
-          preview.src=full(fileName); preview.classList.remove("hidden"); shareWrap.classList.remove("hidden");
-          statusMsg.innerHTML=`✅ Saved – <a href="${full(fileName)}" download>Download</a>`;
-        }else statusMsg.textContent="❌ "+r.error;
-        startBtn.disabled=false;
+        statusMsg.textContent = "⏫ Uploading…";
+        const res = await fetch("/upload", { method: "POST", body: fd })
+                           .then((r) => r.json());
+
+        console.log("📤 Upload result:", res);
+
+        if (res.status === "ok") {
+          fileName = res.filename;
+          const url = fullUrl(fileName);
+          preview.src = url;
+          preview.classList.remove("hidden");
+          shareWrap.classList.remove("hidden");
+          statusMsg.innerHTML = `✅ Saved <a href="${url}" download>Download</a>`;
+        } else {
+          statusMsg.textContent = "❌ Upload failed: " + res.error;
+        }
+        startBtn.disabled = false;
       };
-      mediaRecorder.start(); statusMsg.textContent="🎬 Recording…";
-      startBtn.disabled=true; stopBtn.disabled=false;
-    }catch(e){ alert("Screen‑capture denied."); }
-  };
-  stopBtn.onclick=()=>{ if(mediaRecorder?.state==="recording"){ mediaRecorder.stop(); stopBtn.disabled=true; } };
 
-  /* ==========  share  ========== */
-  copyLinkBtn.onclick = ()=> fileName?copy(full(fileName),copyLinkBtn):alert("⚠ No file.");
-  copySecure.onclick  = async ()=>{
-      if(!fileName) return alert("⚠ No file.");
-      const r=await apiFetch(`/link/secure/${fileName}`).then(x=>x.json());
-      if(r.status==="ok"){ secureUrl=r.url; copy(secureUrl,copySecure,"✅ Secure link"); }
-  };
-  copyPublic.onclick  = async ()=>{
-      if(!fileName) return alert("⚠ No file.");
-      const r=await apiFetch(`/link/public/${fileName}`).then(x=>x.json());
-      r.status==="ok"?copy(r.url,copyPublic):alert("❌ "+r.error);
-  };
-  disablePublic.onclick=async()=>{
-      if(!fileName) return alert("⚠ No file.");
-      const r=await apiFetch(`/link/public/${fileName}`,{method:"DELETE"}).then(x=>x.json());
-      alert(r.status==="ok"?"✅ Public link removed":"❌ "+r.error);
+      mediaRecorder.start();
+      statusMsg.textContent = "🎬 Recording…";
+      startBtn.disabled = true;
+      stopBtn.disabled  = false;
+    } catch (err) {
+      console.error("❌ Recording error:", err);
+      alert("Screen‑capture permission denied.");
+    }
   };
 
-  /* ==========  email  ========== */
-  shareEmail.onclick = ()=> fileName?(emailDlg.showModal(),emailInput.focus()):alert("⚠ No recording.");
-  emailClose.onclick = ()=> emailDlg.close();
-  emailSend.onclick  = async ()=>{
-    const to=emailInput.value.trim(); if(!to) return emailStatus.textContent="❌ Enter e‑mail.";
-    emailSend.disabled=true; emailSend.textContent="⏳…";
-    const r=await apiFetch("/send_email",{method:"POST",headers:{"Content-Type":"application/json"},
-               body:JSON.stringify({to,url:secureUrl||full(fileName)})}).then(x=>x.json());
-    emailStatus.textContent=r.status==="ok"?"✅ Sent!":"❌ "+r.error;
-    emailSend.disabled=false; emailSend.textContent="📤 Send";
+  stopBtn.onclick = () => {
+    if (mediaRecorder?.state === "recording") {
+      mediaRecorder.stop();
+      stopBtn.disabled = true;
+    }
   };
 
-  /* ==========  clip  ========== */
-  openClip.onclick   = ()=>clipPanel.classList.toggle("hidden");
-  clipCancel.onclick = ()=>clipPanel.classList.add("hidden");
-  clipGo.onclick     = async ()=>{
-    const s=+$("#clipStart").value,e=+$("#clipEnd").value;
-    if(!fileName) return alert("⚠ No recording."); if(s>=e) return alert("⚠ Range.");
-    clipGo.disabled=true; clipGo.textContent="⏳…";
-    const r=await apiFetch(`/clip/${fileName}`,{method:"POST",headers:{"Content-Type":"application/json"},
-                 body:JSON.stringify({start:s,end:e})}).then(x=>x.json());
-    r.status==="ok"?copy(full(r.clip),clipGo,"✅ Copied!"):alert("❌ "+r.error);
-    clipGo.disabled=false; clipGo.textContent="📤 Share Clip";
+  /* ========== Share links ========== */
+  copyLinkBtn.onclick = () => {
+    if (!fileName) return alert("⚠ No file to share yet.");
+    copyToClipboard(fullUrl(fileName), copyLinkBtn);
   };
 
-  /* ==========  embed  ========== */
-  const iframe=()=>`<iframe width="${embedWidth.value}" height="${embedHeight.value}" src="${full(fileName)}" frameborder="0" allowfullscreen></iframe>`;
-  openEmbed.onclick = ()=>fileName?(embedBox.value=iframe(),embedDlg.showModal()):alert("⚠ No recording.");
-  embedWidth.oninput=embedHeight.oninput=()=>embedBox.value=iframe();
-  embedCopy.onclick = ()=>copy(embedBox.value,embedCopy);
-  embedClose.onclick=()=>embedDlg.close();
+  copySecure?.addEventListener("click", async () => {
+    if (!fileName) {
+      alert("⚠ No file to share yet.");
+      return;
+    }
+    try {
+      const res = await fetch(`/link/secure/${fileName}`).then((r) => r.json());
+      console.log("🔐 Secure link response:", res);
+      if (res.status === "ok") {
+        copyToClipboard(res.url, copySecure, "✅ Secure link copied (15 min)");
+      } else {
+        alert("❌ " + res.error);
+      }
+    } catch (err) {
+      console.error("❌ Secure link error:", err);
+      alert("❌ Network error");
+    }
+  });
 
-  /* ==========  resume / forget  ========== */
-  resumeBtn.onclick = async ()=>{
-    const r=await apiFetch("/my/files").then(x=>x.json());
-    if(r.status!=="ok"||!r.files.length) return alert("No previous recordings.");
-    const links=r.files.map(f=>`<li><a href="${full(f)}" target="_blank">${f}</a></li>`).join("");
-    const dlg=document.createElement("dialog"); dlg.innerHTML=`<h3>My Recordings</h3><ul>${links}</ul><button>Close</button>`;
-    dlg.querySelector("button").onclick=()=>dlg.close();
-    document.body.appendChild(dlg); dlg.showModal();
+  copyPublic?.addEventListener("click", async () => {
+    if (!fileName) return alert("⚠ No file to share yet.");
+    const res = await fetch(`/link/public/${fileName}`).then((r) => r.json());
+    if (res.status === "ok") {
+      copyToClipboard(res.url, copyPublic, "✅ Public link copied");
+    } else {
+      alert("❌ " + res.error);
+    }
+  });
+
+  disablePublic?.addEventListener("click", async () => {
+    if (!fileName) return alert("⚠ No public link to disable.");
+    const res = await fetch(`/link/public/${fileName}`, { method: "DELETE" })
+                       .then((r) => r.json());
+    alert(res.status === "ok" ? "✅ Public link disabled." : "❌ " + res.error);
+  });
+
+  /* ========== Email modal ========== */
+  shareEmail.onclick = () => {
+    if (!fileName) return alert("⚠ No recording available.");
+    emailInput.value = "";
+    emailStatus.textContent = "";
+    emailDlg.showModal();
   };
-  forgetBtn.onclick = async ()=>{
-    await apiFetch("/forget_session",{method:"POST"});
-    localStorage.removeItem("gs_session"); document.cookie="session=;expires=Thu,01 Jan 1970 00:00:00 GMT";
-    alert("🔄 Session cleared. Reloading…"); location.reload();
+  emailClose.onclick = () => emailDlg.close();
+
+  emailSend.onclick = async () => {
+    const to = emailInput.value.trim();
+    if (!to) {
+      emailStatus.textContent = "❌ Please enter a valid e‑mail.";
+      emailStatus.style.color = "var(--danger)";
+      return;
+    }
+    emailSend.disabled = true;
+    emailSend.textContent = "⏳ Sending…";
+
+    try {
+      const res = await fetch("/send_email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to, url: fullUrl(fileName) }),
+      }).then((r) => r.json());
+
+      emailStatus.textContent =
+        res.status === "ok" ? "✅ Email sent!" : "❌ " + res.error;
+      emailStatus.style.color =
+        res.status === "ok" ? "var(--success)" : "var(--danger)";
+    } catch {
+      emailStatus.textContent = "❌ Network error.";
+      emailStatus.style.color = "var(--danger)";
+    } finally {
+      emailSend.disabled = false;
+      emailSend.textContent = "📤 Send";
+    }
+  };
+
+  /* ========== Clip panel ========== */
+  openClip.onclick = () => {
+    const hidden = clipPanel.classList.toggle("hidden");
+    clipPanel.classList.toggle("fade-in", !hidden);
+  };
+  clipCancel.onclick = () => {
+    clipPanel.classList.add("hidden");
+    clipPanel.classList.remove("fade-in");
+  };
+
+  clipGo.onclick = async () => {
+    const start = +$("#clipStart").value;
+    const end   = +$("#clipEnd").value;
+    if (!fileName) return alert("⚠ No recording to clip.");
+    if (start >= end) return alert("⚠ Invalid range.");
+
+    clipGo.disabled = true;
+    clipGo.textContent = "⏳ Cutting…";
+
+    const res = await fetch(`/clip/${fileName}`, {
+      method : "POST",
+      headers: { "Content-Type": "application/json" },
+      body   : JSON.stringify({ start, end })
+    }).then((r) => r.json());
+
+    if (res.status === "ok") {
+      const url = fullUrl(res.clip);
+      copyToClipboard(url, clipGo, "✅ Clip link copied!");
+    } else {
+      alert("❌ Clip failed: " + res.error);
+    }
+    clipGo.disabled = false;
+    clipGo.textContent = "📤 Share Clip";
+  };
+
+  /* ========== Embed modal ========== */
+  openEmbed.onclick = () => {
+    if (!fileName) return alert("⚠ No recording to embed.");
+    embedBox.value = makeIframe();
+    embedDlg.showModal();
+  };
+  embedWidth.oninput = embedHeight.oninput = () =>
+    (embedBox.value = makeIframe());
+  embedCopy.onclick = () =>
+    copyToClipboard(embedBox.value, embedCopy, "✅ Copied!");
+  embedClose.onclick = () => embedDlg.close();
+
+  /* === Helper fns === */
+  const makeIframe = () =>
+    `<iframe width="${embedWidth.value}" height="${embedHeight.value}" src="${fullUrl(
+      fileName
+    )}" frameborder="0" allowfullscreen></iframe>`;
+
+  const copyToClipboard = (text, btn, msg = "✅ Copied!") => {
+    navigator.clipboard.writeText(text).then(
+      () => {
+        const prev = btn.textContent;
+        btn.textContent = msg;
+        btn.disabled = true;
+        setTimeout(() => {
+          btn.textContent = prev;
+          btn.disabled = false;
+        }, 2000);
+      },
+      () => alert("❌ Copy failed")
+    );
   };
 });
 /* ─────────────────────────────────────────────── */
