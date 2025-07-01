@@ -52,10 +52,12 @@ def upload():
 # ── Clip Route ───────────────────────────────────────────
 @app.route("/clip/<orig>", methods=["POST"])
 def clip(orig):
-    data = request.get_json()
-    start = float(data["start"])
-    end = float(data["end"])
+    """Trim a segment and write a *new* WebM file with clean headers."""
+    data   = request.get_json()
+    start  = float(data["start"])
+    end    = float(data["end"])
 
+    # basic validation
     if start >= end:
         return jsonify({"status": "fail", "error": "start >= end"}), 400
 
@@ -63,46 +65,30 @@ def clip(orig):
     if not os.path.exists(in_path):
         return jsonify({"status": "fail", "error": "file not found"}), 404
 
-    clip_name = datetime.datetime.now().strftime("clip_%Y%m%d_%H%M%S.") + EXT
-    out_path = os.path.join(RECDIR, clip_name)
-    duration = end - start
+    clip_name = datetime.datetime.now().strftime("clip_%Y%m%d_%H%M%S.webm")
+    out_path  = os.path.join(RECDIR, clip_name)
+    duration  = end - start
 
+    # —– Re‑encode to VP9 + Opus (100 % WebM‑safe) —–
     cmd = [
         FFMPEG, "-hide_banner", "-loglevel", "error",
-        "-ss", str(start), "-t", str(duration), "-i", in_path,
-        "-c", "copy", "-y", out_path
+        "-ss", str(start),            # fast seek
+        "-t",  str(duration),
+        "-i",  in_path,
+        "-c:v", "libvpx-vp9",         # ✅ video
+        "-b:v", "1M",
+        "-c:a", "libopus",            # ✅ audio
+        "-b:a", "128k",
+        "-movflags", "+faststart",
+        "-y",  out_path
     ]
 
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
         return jsonify({"status": "ok", "clip": clip_name})
     except subprocess.CalledProcessError as e:
+        # return FFmpeg’s stderr so you can inspect from the browser console
         return jsonify({"status": "fail", "error": e.stderr.strip()}), 500
-
-# ── Serve Files ──────────────────────────────────────────
-@app.route("/recordings/<fname>")
-def recordings(fname):
-    return send_from_directory(RECDIR, fname)
-
-@app.route("/download/<fname>")
-def download(fname):
-    return send_from_directory(RECDIR, fname, as_attachment=True)
-
-# ── Send Email ───────────────────────────────────────────
-@app.route("/send_email", methods=["POST"])
-def send_email():
-    data = request.get_json()
-    try:
-        mail.send(
-            Message(
-                "GrabScreen recording",
-                recipients=[data["to"]],
-                body=f"Hi,\n\nHere is your recording:\n{data['url']}\n\nEnjoy!"
-            )
-        )
-        return jsonify({"status": "ok"})
-    except Exception as e:
-        return jsonify({"status": "fail", "error": str(e)}), 500
 
 # ── Debug: Show Files ────────────────────────────────────
 @app.route("/debug/files")
