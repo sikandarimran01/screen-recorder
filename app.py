@@ -7,55 +7,61 @@ import datetime, os, subprocess
 
 app = Flask(__name__)
 
-# ── Mail (use Render env vars!) ────────────────────────────
+# ── Mail (credentials live in Render env vars) ────────────
 app.config.update(
     MAIL_SERVER="smtp.gmail.com",
     MAIL_PORT=587,
     MAIL_USE_TLS=True,
-    MAIL_USERNAME=os.getenv("MAIL_USERNAME"),   # set in Render dashboard
-    MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),   # Gmail App‑Password
+    MAIL_USERNAME=os.getenv("MAIL_USERNAME"),      # set in dashboard
+    MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),      # Gmail App‑Password
     MAIL_DEFAULT_SENDER=("GrabScreen", os.getenv("MAIL_USERNAME")),
 )
 mail = Mail(app)
 
-# ── Paths & FFmpeg settings ───────────────────────────────
+# ── Persistent‑disk path & FFmpeg opts ───────────────────
 EXT    = "webm"
 FFMPEG = "ffmpeg"
-RECDIR = "static/recordings"
-os.makedirs(RECDIR, exist_ok=True)     # auto‑create at start‑up
 
-# ── Routes ────────────────────────────────────────────────
+# Mount your Render disk at /mnt/recordings (or change this)
+RECDIR = "/mnt/recordings"
+os.makedirs(RECDIR, exist_ok=True)
+
+# ── Routes ───────────────────────────────────────────────
 @app.route("/")
 def index():
     return render_template("index.html",
                            year=datetime.datetime.now().year)
 
-# ---------- Upload endpoint (browser → server) ------------
+# -------- Upload endpoint (browser → server) -------------
 @app.route("/upload", methods=["POST"])
 def upload():
     f = request.files["video"]
-    fname = datetime.datetime.now().strftime(f"recording_%Y%m%d_%H%M%S.webm")
+    fname = datetime.datetime.now().strftime(f"recording_%Y%m%d_%H%M%S.{EXT}")
     save_path = os.path.join(RECDIR, fname)
 
     try:
-        print("📁 Uploading file to:", os.path.abspath(save_path))  # 🔍 this shows full path
+        print("📁 Uploading file to:", save_path)
         f.save(save_path)
     except Exception as e:
         print("❌ Save failed:", e)
         return jsonify({"status": "fail", "error": str(e)}), 500
 
-    return jsonify({"status": "ok", "filename": fname, "url": f"/{save_path}"})
+    # Front‑end can GET this URL directly
+    return jsonify({
+        "status":   "ok",
+        "filename": fname,
+        "url":      f"/recordings/{fname}"
+    })
 
-
-# ---------- Trim / clip with FFmpeg (re‑encode) -----------
+# -------- Clip with FFmpeg (copy‑stream no re‑encode) ----
 @app.route("/clip/<orig>", methods=["POST"])
 def clip(orig):
-    data = request.get_json()
-    start, end = float(data["start"]), float(data["end"])
+    data          = request.get_json()
+    start, end    = map(float, (data["start"], data["end"]))
     if start >= end:
         return jsonify({"status": "fail", "error": "start >= end"}), 400
 
-    in_path = os.path.join(RECDIR, orig)
+    in_path  = os.path.join(RECDIR, orig)
     if not os.path.exists(in_path):
         return jsonify({"status": "fail", "error": "file not found"}), 404
 
@@ -65,56 +71,41 @@ def clip(orig):
 
     cmd = [
         FFMPEG, "-hide_banner", "-loglevel", "error",
-        "-ss", str(start),
-        "-t",  str(duration),
-        "-i",  in_path,
-        "-c:v", "libvpx",     # VP8 video
-        "-c:a", "libvorbis",  # Vorbis audio
-        "-y",  out_path
+        "-ss", str(start), "-t", str(duration),
+        "-i", in_path,
+        "-c", "copy",                 # no re‑encode → instant
+        "-y", out_path
     ]
+
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
         return jsonify({"status": "ok", "clip": clip_name})
     except subprocess.CalledProcessError as e:
-        return jsonify({"status": "fail",
-                        "error": e.stderr.strip()}), 500
+        return jsonify({"status": "fail", "error": e.stderr.strip()}), 500
 
-# ---------- Helper test page (manual upload) --------------
-@app.route("/test_upload", methods=["GET", "POST"])
-def test_upload():
-    if request.method == "POST":
-        f = request.files["file"]
-        path = os.path.join(RECDIR, f.filename)
-        f.save(path)
-        return f"Uploaded to {path}"
-    # simple HTML form for manual testing
-    return """
-    <h2>Manual Upload Test</h2>
-    <form method="POST" enctype="multipart/form-data">
-        <input type="file" name="file" required />
-        <input type="submit" value="Upload" />
-    </form>
-    """
+# -------- Serve recordings & downloads -------------------
+@app.route("/recordings/<fname>")
+def recordings(fname):
+    """Stream or download a saved recording/clip."""
+    return send_from_directory(RECDIR, fname)
 
-# ---------- Send share‑link e‑mail ------------------------
-@app.route("/send_email", methods=["POST"])
-def send_email():
-    data = request.get_json()
-    to  = data["to"]
-    url = data["url"]
-    try:
-        mail.send(Message("GrabScreen recording",
-                          recipients=[to],
-                          body=f"Hi,\n\nHere is the recording link:\n{url}\n\nEnjoy!"))
-        return jsonify({"status": "ok"})
-    except Exception as e:
-        return jsonify({"status": "fail", "error": str(e)}), 500
-
-# ---------- Direct download ------------------------------
 @app.route("/download/<fname>")
 def download(fname):
     return send_from_directory(RECDIR, fname, as_attachment=True)
 
-# ── Run locally only ──────────────────────────────────────
+# -------- Send e‑mail with share link --------------------
+@app.route("/send_email", methods=["POST"])
+def send_email():
+    data = request.get_json()
+    try:
+        mail.send(
+            Message("GrabScreen recording",
+                    recipients=[data["to"]],
+                    body=f"Hi,\n\nHere is your recording:\n{data['url']}\n\nEnjoy!"))
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"status": "fail", "error": str(e)}), 500
+
+# ── Local run only ───────────────────────────────────────
 if __name__ == "__main__":
     app.run(debug=True)
