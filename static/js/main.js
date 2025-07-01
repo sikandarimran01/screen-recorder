@@ -1,26 +1,36 @@
 /* ───────────────────────────────────────────────
-   main.js – Magic‑link session aware (fixed order)
+   main.js – Magic‑link session aware + media grid
    ─────────────────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", () => {
-  /* ───── Session helper ───── */
+  /* ----------  helpers first (so they’re hoisted) ---------- */
+  const $  = (s) => document.querySelector(s);
   const SESSION_KEY = "gs_session";
+
+  /* theme‑agnostic clipboard helper */
+  function copy(text, btn, msg = "✅ Copied!") {
+    navigator.clipboard.writeText(text).then(() => {
+      if (!btn) return;
+      const prev = btn.textContent;
+      btn.textContent = msg; btn.disabled = true;
+      setTimeout(() => { btn.textContent = prev; btn.disabled = false; }, 1700);
+    });
+  }
+
+  /* ----------  session + fetch wrapper ---------- */
   let session = localStorage.getItem(SESSION_KEY) ||
                 crypto.randomUUID().replace(/-/g, "");
   localStorage.setItem(SESSION_KEY, session);
 
   const apiFetch = (url, opts = {}) => {
     opts.headers = { "X-Session": session, ...(opts.headers || {}) };
-    return fetch(url, opts).then(async (r) => {
-      const m = document.cookie.match(/(?:^|;\s*)session=([^;]+)/);
+    return fetch(url, opts).then(async r => {
+      const m = document.cookie.match(/(?:^|;\\s*)session=([^;]+)/);
       if (m) { session = m[1]; localStorage.setItem(SESSION_KEY, session); }
       return r;
     });
   };
 
-  /* ───── DOM helpers ───── */
-  const $  = (s) => document.querySelector(s);
-
-  /* ───── Static refs ───── */
+  /* ----------  fixed DOM refs ---------- */
   const startBtn   = $("#startBtn");
   const stopBtn    = $("#stopBtn");
   const statusMsg  = $("#statusMsg");
@@ -54,39 +64,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const resumeBtn  = $("#resumeBtn");
   const forgetBtn  = $("#forgetSession");
-  const filesPanel = $("#filesPanel");      // created in HTML now
+  const filesPanel = $("#filesPanel");
+  const mediaGrid  = $("#mediaGrid");   // new grid inside filesPanel
 
-  /* ───── Computed helpers (hoisted) ───── */
-  const isLocal  = ["localhost", "127.0.0.1"].includes(location.hostname);
+  /* ----------  computed path helpers ---------- */
+  const isLocal  = ["localhost","127.0.0.1"].includes(location.hostname);
   const REC_BASE = isLocal ? "/static/recordings/" : "/recordings/";
   const fullUrl  = (f) => `${location.origin}${REC_BASE}${f}`;
 
-  function copy(text, btn, msg = "✅ Copied!") {
-    navigator.clipboard.writeText(text).then(() => {
-      if (!btn) return;
-      const prev = btn.textContent;
-      btn.textContent = msg;
-      btn.disabled = true;
-      setTimeout(() => { btn.textContent = prev; btn.disabled = false; }, 1700);
-    });
-  }
-
-  const iframe = () =>
-    `<iframe width="${embedWidth.value}" height="${embedHeight.value}"
-      src="${fullUrl(fileName)}" frameborder="0" allowfullscreen></iframe>`;
-
-  /* ───── State vars ───── */
+  /* ----------  state ---------- */
   let mediaRecorder, chunks = [], fileName = "", secureUrl = "";
+  let filesSet = new Set();            // easy lookup / update
 
-  /* ───── Load previous files list ───── */
+  /* ----------  initial load of session files ---------- */
   (async () => {
     try {
       const { status, files = [] } = await apiFetch("/session/files").then(r=>r.json());
-      if (status === "ok" && files.length) { showFiles(files); }
-    } catch {/* ignore first‑visit errors */}
+      if (status === "ok" && files.length) { renderFiles(files); }
+    } catch { /* first‑visit: ignore */ }
   })();
 
-  /* ───── Recording controls ───── */
+  /* ----------  RECORD  ---------- */
   startBtn?.addEventListener("click", async () => {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({ video:true, audio:true });
@@ -102,13 +100,14 @@ document.addEventListener("DOMContentLoaded", () => {
         const res = await apiFetch("/upload", { method:"POST", body:fd }).then(r=>r.json());
 
         if (res.status === "ok") {
-          fileName = res.filename; secureUrl = res.url;
+          fileName  = res.filename; secureUrl = res.url;
           preview.src = fullUrl(fileName);
           preview.classList.remove("hidden");
           shareWrap.classList.remove("hidden");
           statusMsg.innerHTML =
             `✅ Saved – <a href="${fullUrl(fileName)}" download>Download raw</a>`;
-          showFiles([fileName, ...currentFiles()]);
+
+          addFile(fileName);               // update grid
         } else {
           statusMsg.textContent = "❌ Upload failed: "+res.error;
         }
@@ -125,22 +124,23 @@ document.addEventListener("DOMContentLoaded", () => {
     if (mediaRecorder?.state === "recording") { mediaRecorder.stop(); stopBtn.disabled = true; }
   });
 
-  /* ───── Share links ───── */
+  /* ----------  SHARE ---------- */
   copyLinkBtn?.addEventListener("click", () => {
-    if (!fileName) return alert("⚠ No recording yet."); copy(fullUrl(fileName), copyLinkBtn);
+    if (!fileName) return alert("⚠ No recording yet.");
+    copy(fullUrl(fileName), copyLinkBtn);
   });
 
   copySecure?.addEventListener("click", async () => {
     if (!fileName) return alert("⚠ No recording yet.");
     const r = await apiFetch(`/link/secure/${fileName}`).then(r=>r.json());
     if (r.status === "ok") secureUrl = r.url;
-    copy(secureUrl, copySecure, "✅ Secure (15 min) copied");
+    copy(secureUrl, copySecure, "✅ Secure copied");
   });
 
-  copyPublic?.addEventListener("click", () => publicLink(true));
-  disablePub?.addEventListener("click", () => publicLink(false));
+  copyPublic?.addEventListener("click", () => togglePublic(true));
+  disablePub?.addEventListener("click", () => togglePublic(false));
 
-  async function publicLink(create) {
+  async function togglePublic(create) {
     if (!fileName) return alert("⚠ No recording yet.");
     const r = await apiFetch(`/link/public/${fileName}`, { method:create?"GET":"DELETE" }).then(r=>r.json());
     if (r.status === "ok") {
@@ -149,7 +149,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } else alert("❌ "+r.error);
   }
 
-  /* ───── Email ───── */
+  /* ----------  EMAIL ---------- */
   shareEmail?.addEventListener("click", () => {
     if (!fileName) return alert("⚠ No recording yet.");
     emailInput.value = ""; emailStat.textContent = ""; emailDlg.showModal();
@@ -169,7 +169,7 @@ document.addEventListener("DOMContentLoaded", () => {
     emailSend.disabled = false; emailSend.textContent = "📤 Send";
   });
 
-  /* ───── Clip ───── */
+  /* ----------  CLIP ---------- */
   openClip?.addEventListener("click", () => clipPane.classList.toggle("hidden"));
   clipCancel?.addEventListener("click", () => clipPane.classList.add("hidden"));
   clipGo?.addEventListener("click", async () => {
@@ -187,7 +187,7 @@ document.addEventListener("DOMContentLoaded", () => {
     clipGo.disabled = false; clipGo.textContent = "📤 Share Clip";
   });
 
-  /* ───── Embed ───── */
+  /* ----------  EMBED ---------- */
   openEmbed?.addEventListener("click", () => {
     if (!fileName) return alert("⚠ No recording.");
     embedBox.value = iframe(); embedDlg.showModal();
@@ -197,26 +197,44 @@ document.addEventListener("DOMContentLoaded", () => {
   embedCopy?.addEventListener("click", () => copy(embedBox.value, embedCopy));
   embedClose?.addEventListener("click", () => embedDlg.close());
 
-  /* ───── Resume / forget ───── */
+  /* ----------  SESSION controls ---------- */
   resumeBtn?.addEventListener("click", () => filesPanel.classList.toggle("hidden"));
   forgetBtn?.addEventListener("click", async () => {
     await apiFetch("/session/forget", { method:"POST" });
     localStorage.removeItem(SESSION_KEY);
-    filesPanel.innerHTML = ""; filesPanel.classList.add("hidden");
-    resumeBtn.classList.add("hidden"); forgetBtn.classList.add("hidden");
+    filesSet.clear();
+    renderFiles([]);                       // clears grid
+    filesPanel.classList.add("hidden");
+    resumeBtn.classList.add("hidden");
+    forgetBtn.classList.add("hidden");
     alert("✅ Session forgotten.");
   });
 
-  /* helpers */
-  function currentFiles() {
-    return Array.from(filesPanel.querySelectorAll("li a")).map(a => a.textContent);
+  /* ----------  grid render helpers ---------- */
+  function addFile(f) {
+    if (filesSet.has(f)) return;
+    filesSet.add(f);
+    const card = document.createElement("div");
+    card.className = "media-card";
+    card.innerHTML = `
+        <video src="${fullUrl(f)}" controls></video>
+        <p>${f}</p>`;
+    mediaGrid.prepend(card);
+    resumeBtn.classList.remove("hidden");
+    forgetBtn.classList.remove("hidden");
   }
 
-  function showFiles(arr) {
-    filesPanel.innerHTML =
-      `<h3>Your recordings</h3><ul>${arr.map(f=>`<li><a href="${fullUrl(f)}" target="_blank">${f}</a></li>`).join("")}</ul>`;
-    resumeBtn?.classList.remove("hidden");
-    forgetBtn?.classList.remove("hidden");
+  function renderFiles(arr = []) {
+    filesSet = new Set(arr);
+    mediaGrid.innerHTML = arr.map(f => `
+      <div class="media-card">
+        <video src="${fullUrl(f)}" controls></video>
+        <p>${f}</p>
+      </div>`).join("");
+    if (arr.length) {
+      resumeBtn.classList.remove("hidden");
+      forgetBtn.classList.remove("hidden");
+    }
   }
 });
 /* ─────────────────────────────────────────────── */
