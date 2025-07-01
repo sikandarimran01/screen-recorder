@@ -231,6 +231,78 @@ dialog input, dialog textarea {
   font-size: 1rem;
 }
 
+/* --- Magic Link Session Controls --- */
+.session-controls {
+  margin-top: 1.5rem;
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* --- Files Panel (Recent Recordings) --- */
+#filesPanel {
+  margin-top: 2rem;
+  padding: 1rem;
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  color: var(--text);
+}
+
+#filesPanel h2 {
+  font-size: 1.2rem;
+  margin-bottom: 1rem;
+  color: var(--text);
+  text-align: left;
+}
+
+#filesList {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+#filesList li {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius);
+  margin-bottom: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.95rem;
+}
+
+#filesList a {
+  color: var(--brand);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+#filesList a:hover {
+  text-decoration: underline;
+}
+
+/* --- Mobile Responsive Adjustments for Session UI --- */
+@media (max-width: 640px) {
+  .session-controls {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  #filesPanel {
+    padding: 1rem 0.75rem;
+  }
+
+  #filesList li {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+
 /* --- Video Preview --- */
 video { width: 100%; border-radius: var(--radius); margin-top: 1rem; background: #000; }
 
