@@ -20,9 +20,9 @@ app.config.update(
 mail = Mail(app)
 
 # ── Paths & FFmpeg settings ──────────────────────────────
-EXT     = "webm"           # browser uploads WebM
+EXT     = "webm"               # browser uploads WebM
 FFMPEG  = "ffmpeg"
-RECDIR  = "/mnt/recordings"   # ← mount your disk here
+RECDIR  = "/mnt/recordings"    # ← mount your disk here
 os.makedirs(RECDIR, exist_ok=True)
 
 # ─────────────────────────────────────────────────────────
@@ -30,10 +30,7 @@ os.makedirs(RECDIR, exist_ok=True)
 # ─────────────────────────────────────────────────────────
 @app.route("/")
 def index():
-    return render_template(
-        "index.html",
-        year=datetime.datetime.now().year
-    )
+    return render_template("index.html", year=datetime.datetime.now().year)
 
 # ---------- Upload (browser → server) --------------------
 @app.route("/upload", methods=["POST"])
@@ -42,28 +39,28 @@ def upload():
     if not video_file:
         return jsonify({"status": "fail", "error": "No file"}), 400
 
-    fname      = datetime.datetime.now().strftime("recording_%Y%m%d_%H%M%S.webm")
-    save_path  = os.path.join(RECDIR, fname)
+    fname = datetime.datetime.now().strftime("recording_%Y%m%d_%H%M%S.webm")
+    save_path = os.path.join(RECDIR, fname)
 
     try:
         print("📁 Saving to:", save_path)
         video_file.save(save_path)
     except Exception as e:
         print("❌ Save failed:", e)
-           return jsonify({"status": "fail", "error": str(e)}), 500)
+        return jsonify({"status": "fail", "error": str(e)}), 500
 
-    # 📢 Return URL that the <video> tag can load
     return jsonify({
-        "status":   "ok",
+        "status": "ok",
         "filename": fname,
-        "url":      f"/recordings/{fname}"
+        "url": f"/recordings/{fname}"
     })
 
 # ---------- Trim / clip ----------------------------------
 @app.route("/clip/<orig>", methods=["POST"])
 def clip(orig):
-    data         = request.get_json()
-    start, end   = float(data["start"]), float(data["end"])
+    data = request.get_json()
+    start = float(data["start"])
+    end = float(data["end"])
 
     if start >= end:
         return jsonify({"status": "fail", "error": "start >= end"}), 400
@@ -73,14 +70,14 @@ def clip(orig):
         return jsonify({"status": "fail", "error": "file not found"}), 404
 
     clip_name = datetime.datetime.now().strftime("clip_%Y%m%d_%H%M%S.webm")
-    out_path  = os.path.join(RECDIR, clip_name)
-    duration  = end - start
+    out_path = os.path.join(RECDIR, clip_name)
+    duration = end - start
 
     cmd = [
         FFMPEG, "-hide_banner", "-loglevel", "error",
         "-ss", str(start), "-t", str(duration), "-i", in_path,
         "-c:v", "libvpx-vp9", "-b:v", "1M",
-        "-c:a", "libopus",    "-b:a", "128k",
+        "-c:a", "libopus", "-b:a", "128k",
         "-y", out_path
     ]
 
@@ -111,7 +108,7 @@ def send_email():
         ))
         return jsonify({"status": "ok"})
     except Exception as e:
-        return jsonify({"status": "fail", "error": str(e)}), 500)
+        return jsonify({"status": "fail", "error": str(e)}), 500
 
 # ---------- Simple file‑listing helper -------------------
 @app.route("/debug/files")
