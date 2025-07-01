@@ -19,7 +19,7 @@ app.config.update(
 mail = Mail(app)
 
 # ── Paths & FFmpeg settings ──────────────────────────────
-EXT    = "webm"          # keep browser‑native
+EXT    = "mp4"          # keep browser‑native
 FFMPEG = "ffmpeg"
 
 # <‑‑ Mount your Render disk at this absolute path
@@ -81,7 +81,8 @@ def clip(orig):
         "-ss", str(start),           # fast seek
         "-t",  str(duration),
         "-i",  in_path,
-        "-c",  "copy",               # no re‑encode
+        "-c:v", "libvpx",      # ✅ VP8 for video (WebM-safe)
+       "-c:a", "libvorbis",   # ✅ Vorbis for audio (WebM-safe)
         "-y",  out_path
     ]
 
