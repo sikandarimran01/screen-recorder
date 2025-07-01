@@ -34,19 +34,18 @@ def index():
 @app.route("/upload", methods=["POST"])
 def upload():
     f = request.files["video"]
-    fname = datetime.datetime.now().strftime(f"recording_%Y%m%d_%H%M%S.{EXT}")
+    fname = datetime.datetime.now().strftime(f"recording_%Y%m%d_%H%M%S.webm")
     save_path = os.path.join(RECDIR, fname)
 
     try:
-        print(f"⏺ Saving video to {save_path}")
+        print("📁 Uploading file to:", os.path.abspath(save_path))  # 🔍 this shows full path
         f.save(save_path)
     except Exception as e:
-        print("❌ Failed to save:", e)
+        print("❌ Save failed:", e)
         return jsonify({"status": "fail", "error": str(e)}), 500
 
-    return jsonify({"status": "ok",
-                    "filename": fname,
-                    "url": f"/{save_path}"})
+    return jsonify({"status": "ok", "filename": fname, "url": f"/{save_path}"})
+
 
 # ---------- Trim / clip with FFmpeg (re‑encode) -----------
 @app.route("/clip/<orig>", methods=["POST"])
