@@ -1,98 +1,190 @@
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import (
+    Flask, render_template, request, jsonify,
+    send_from_directory
+)
 from flask_mail import Mail, Message
-from werkzeug.utils import secure_filename
-import os
-import uuid
-import shutil
+import datetime, os, subprocess, json, random, string
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 app = Flask(__name__)
 
-# === Configuration ===
-UPLOAD_FOLDER = os.path.join("static", "recordings")
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# ── Mail config (set via ENV in Render) ─────────────────
+app.config.update(
+    MAIL_SERVER="smtp.gmail.com",
+    MAIL_PORT=587,
+    MAIL_USE_TLS=True,
+    MAIL_USERNAME=os.getenv("MAIL_USERNAME"),
+    MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),
+    MAIL_DEFAULT_SENDER=("GrabScreen", os.getenv("MAIL_USERNAME")),
+)
 
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024  # Max 500MB
-app.config["MAIL_SERVER"] = "smtp.gmail.com"
-app.config["MAIL_PORT"] = 587
-app.config["MAIL_USE_TLS"] = True
-app.config["MAIL_USERNAME"] = "your_email@gmail.com"
-app.config["MAIL_PASSWORD"] = "your_password"
-app.config["MAIL_DEFAULT_SENDER"] = app.config["MAIL_USERNAME"]
+# ── Security settings ───────────────────────────────────
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
+serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
+TOKEN_EXPIRY_SECONDS = 15 * 60  # 15 minutes
 
 mail = Mail(app)
 
-# === Routes ===
+# ── Storage paths ───────────────────────────────────────
+EXT     = "webm"
+FFMPEG  = "ffmpeg"
+RECDIR  = "/mnt/recordings"
+os.makedirs(RECDIR, exist_ok=True)
+
+# ── Persistent public link storage ──────────────────────
+LINKS_FILE = "public_links.json"
+if os.path.exists(LINKS_FILE):
+    with open(LINKS_FILE, "r") as f:
+        public_links = json.load(f)
+else:
+    public_links = {}
+
+def save_links():
+    with open(LINKS_FILE, "w") as f:
+        json.dump(public_links, f)
+
+# ─────────────────────────────────────────────────────────
+# Routes
+# ─────────────────────────────────────────────────────────
+
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", year=datetime.datetime.now().year)
 
 @app.route("/upload", methods=["POST"])
 def upload():
-    if "video" not in request.files:
-        return jsonify({"status": "error", "error": "No video file"})
-    
-    file = request.files["video"]
-    if file.filename == "":
-        return jsonify({"status": "error", "error": "Empty filename"})
+    video_file = request.files.get("video")
+    if not video_file:
+        return jsonify({"status": "fail", "error": "No file"}), 400
 
-    filename = secure_filename(f"{uuid.uuid4().hex}.webm")
-    filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-    file.save(filepath)
-    return jsonify({"status": "ok", "filename": filename})
+    fname = datetime.datetime.now().strftime("recording_%Y%m%d_%H%M%S.webm")
+    save_path = os.path.join(RECDIR, fname)
 
-@app.route("/recordings/<filename>")
-def serve_recording(filename):
-    return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
+    try:
+        video_file.save(save_path)
+    except Exception as e:
+        return jsonify({"status": "fail", "error": str(e)}), 500
+
+    return jsonify({"status": "ok", "filename": fname, "url": f"/recordings/{fname}"})
+
+
+@app.route("/clip/<orig>", methods=["POST"])
+def clip(orig):
+    data = request.get_json()
+    start = float(data["start"])
+    end = float(data["end"])
+
+    if start >= end:
+        return jsonify({"status": "fail", "error": "start >= end"}), 400
+
+    in_path = os.path.join(RECDIR, orig)
+    if not os.path.exists(in_path):
+        return jsonify({"status": "fail", "error": "file not found"}), 404
+
+    clip_name = datetime.datetime.now().strftime("clip_%Y%m%d_%H%M%S.webm")
+    out_path = os.path.join(RECDIR, clip_name)
+    duration = end - start
+
+    cmd = [FFMPEG, "-hide_banner", "-loglevel", "error",
+           "-ss", str(start), "-t", str(duration), "-i", in_path,
+           "-c:v", "libvpx-vp9", "-b:v", "1M",
+           "-c:a", "libopus", "-b:a", "128k", "-y", out_path]
+
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        return jsonify({"status": "ok", "clip": clip_name})
+    except subprocess.CalledProcessError as e:
+        return jsonify({"status": "fail", "error": e.stderr.strip()}), 500
+
+@app.route("/recordings/<fname>")
+def recordings(fname):
+    return send_from_directory(RECDIR, fname)
+
+@app.route("/download/<fname>")
+def download(fname):
+    return send_from_directory(RECDIR, fname, as_attachment=True)
+
+@app.route("/link/secure/<fname>")
+def generate_secure_link(fname):
+    if not os.path.exists(os.path.join(RECDIR, fname)):
+        return jsonify({"status": "fail", "error": "file not found"}), 404
+
+    token = serializer.dumps(fname)
+    url = request.url_root.rstrip("/") + "/secure/" + token
+    return jsonify({"status": "ok", "url": url})
+
+@app.route("/secure/<token>")
+def secure_download(token):
+    try:
+        fname = serializer.loads(token, max_age=TOKEN_EXPIRY_SECONDS)
+    except SignatureExpired:
+        return "⏳ Link expired.", 410
+    except BadSignature:
+        return "❌ Invalid link.", 400
+    return send_from_directory(RECDIR, fname)
+
+@app.route("/link/public/<fname>", methods=["GET"])
+def get_or_create_public_link(fname):
+    if not os.path.exists(os.path.join(RECDIR, fname)):
+        return jsonify({"status": "fail", "error": "File not found"}), 404
+
+    for token, f in public_links.items():
+        if f == fname:
+            url = request.url_root.rstrip("/") + "/public/" + token
+            return jsonify({"status": "ok", "url": url})
+
+    token = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+    public_links[token] = fname
+    save_links()
+    return jsonify({"status": "ok", "url": request.url_root.rstrip("/") + "/public/" + token})
+
+@app.route("/link/public/<fname>", methods=["DELETE"])
+def delete_public_link(fname):
+    removed = False
+    for token, f in list(public_links.items()):
+        if f == fname:
+            del public_links[token]
+            removed = True
+    if removed:
+        save_links()
+        return jsonify({"status": "ok", "message": "Link removed"})
+    return jsonify({"status": "fail", "error": "No public link found"}), 404
+
+@app.route("/public/<token>")
+def serve_public_file(token):
+    fname = public_links.get(token)
+    if not fname:
+        return "❌ Invalid or expired link.", 404
+    return send_from_directory(RECDIR, fname)
 
 @app.route("/send_email", methods=["POST"])
 def send_email():
     data = request.get_json()
-    to = data.get("to")
-    url = data.get("url")
-    if not to or not url:
-        return jsonify({"status": "error", "error": "Missing email or URL"})
-    
     try:
-        msg = Message("Your Screen Recording", recipients=[to])
-        msg.body = f"Here is your screen recording: {url}"
-        mail.send(msg)
+        mail.send(Message(
+            "GrabScreen recording",
+            recipients=[data["to"]],
+            body=f"Hi,\n\nHere is your recording:\n{data['url']}\n\nEnjoy!"
+        ))
         return jsonify({"status": "ok"})
     except Exception as e:
-        return jsonify({"status": "error", "error": str(e)})
+        return jsonify({"status": "fail", "error": str(e)}), 500
 
-@app.route("/clip/<filename>", methods=["POST"])
-def clip(filename):
-    data = request.get_json()
-    start = int(data.get("start", 0))
-    end = int(data.get("end", 0))
+@app.route("/debug/files")
+def list_files():
+    return "<br>".join(sorted(os.listdir(RECDIR)))
 
-    original_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-    if not os.path.exists(original_path):
-        return jsonify({"status": "error", "error": "Original file not found"})
+@app.route("/delete/<filename>", methods=["POST"])
+def delete_file(filename):
+    file_path = os.path.join(RECDIR, filename)
+    if not os.path.exists(file_path):
+        return jsonify({"status": "fail", "error": "File not found"}), 404
+    try:
+        os.remove(file_path)
+        return jsonify({"status": "ok", "message": f"{filename} deleted"})
+    except Exception as e:
+        return jsonify({"status": "fail", "error": str(e)}), 500
 
-    # Simulate clipping by copying the original (implement real FFmpeg later)
-    new_filename = f"clip_{uuid.uuid4().hex}.webm"
-    new_path = os.path.join(app.config["UPLOAD_FOLDER"], new_filename)
-    shutil.copyfile(original_path, new_path)
-
-    return jsonify({"status": "ok", "filename": new_filename})
-
-@app.route("/link/secure/<filename>")
-def secure_link(filename):
-    # Simulate secure link (15-min link)
-    url = request.host_url + f"recordings/{filename}"
-    return jsonify({"status": "ok", "url": url})
-
-@app.route("/link/public/<filename>", methods=["GET", "DELETE"])
-def public_link(filename):
-    url = request.host_url + f"recordings/{filename}"
-    if request.method == "GET":
-        return jsonify({"status": "ok", "url": url})
-    elif request.method == "DELETE":
-        return jsonify({"status": "ok"})  # Simulated disabling
-    return jsonify({"status": "error", "error": "Invalid request"})
-
-# === Entry point ===
+# ── Local testing ────────────────────────────────────────
 if __name__ == "__main__":
     app.run(debug=True)
