@@ -5,8 +5,6 @@ from flask import (
 )
 from flask_mail import Mail, Message
 import datetime, os, subprocess, json, random, string
-
-# ── NEW: secure‑token imports ──────────────────────────
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 app = Flask(__name__)
@@ -21,18 +19,17 @@ app.config.update(
     MAIL_DEFAULT_SENDER=("GrabScreen", os.getenv("MAIL_USERNAME")),
 )
 
-# ── NEW: Secret key for signed links ────────────────────
-#      ⚠️  Set `SECRET_KEY` in your Render dashboard.
+# ── Secret key for signed links ─────────────────────────
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
-TOKEN_EXPIRY_SECONDS = 15 * 60  # 15 minutes
+TOKEN_EXPIRY_SECONDS = 15 * 60  # 15 minutes
 
 mail = Mail(app)
 
-# ── Paths & FFmpeg settings ──────────────────────────────
-EXT     = "webm"               # browser uploads WebM
+# ── Paths & FFmpeg settings ─────────────────────────────
+EXT     = "webm"
 FFMPEG  = "ffmpeg"
-RECDIR  = "/mnt/recordings"    # ← mount your disk here
+RECDIR  = "/mnt/recordings"
 os.makedirs(RECDIR, exist_ok=True)
 
 # ── Public link storage (persistent JSON) ───────────────
@@ -43,8 +40,8 @@ if os.path.exists(LINKS_FILE):
 else:
     public_links = {}
 
-def save_links():
-    """Persist public_links dict to disk."""
+def save_links() -> None:
+    """Persist the public_links map to disk."""
     with open(LINKS_FILE, "w") as f:
         json.dump(public_links, f)
 
@@ -55,7 +52,7 @@ def save_links():
 def index():
     return render_template("index.html", year=datetime.datetime.now().year)
 
-# ---------- Upload (browser → server) --------------------
+# ---------- Upload -----------------------------------------------------------
 @app.route("/upload", methods=["POST"])
 def upload():
     video_file = request.files.get("video")
@@ -66,24 +63,18 @@ def upload():
     save_path = os.path.join(RECDIR, fname)
 
     try:
-        print("📁 Saving to:", save_path)
         video_file.save(save_path)
     except Exception as e:
-        print("❌ Save failed:", e)
         return jsonify({"status": "fail", "error": str(e)}), 500
 
-    return jsonify({
-        "status": "ok",
-        "filename": fname,
-        "url": f"/recordings/{fname}"
-    })
+    return jsonify({"status": "ok", "filename": fname, "url": f"/recordings/{fname}"})
 
-# ---------- Trim / clip ----------------------------------
+# ---------- Trim / clip ------------------------------------------------------
 @app.route("/clip/<orig>", methods=["POST"])
 def clip(orig):
     data = request.get_json()
     start = float(data["start"])
-    end = float(data["end"])
+    end   = float(data["end"])
 
     if start >= end:
         return jsonify({"status": "fail", "error": "start >= end"}), 400
@@ -93,16 +84,13 @@ def clip(orig):
         return jsonify({"status": "fail", "error": "file not found"}), 404
 
     clip_name = datetime.datetime.now().strftime("clip_%Y%m%d_%H%M%S.webm")
-    out_path = os.path.join(RECDIR, clip_name)
-    duration = end - start
+    out_path  = os.path.join(RECDIR, clip_name)
+    duration  = end - start
 
-    cmd = [
-        FFMPEG, "-hide_banner", "-loglevel", "error",
-        "-ss", str(start), "-t", str(duration), "-i", in_path,
-        "-c:v", "libvpx-vp9", "-b:v", "1M",
-        "-c:a", "libopus", "-b:a", "128k",
-        "-y", out_path
-    ]
+    cmd = [FFMPEG, "-hide_banner", "-loglevel", "error",
+           "-ss", str(start), "-t", str(duration), "-i", in_path,
+           "-c:v", "libvpx-vp9", "-b:v", "1M",
+           "-c:a", "libopus", "-b:a", "128k", "-y", out_path]
 
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
@@ -110,7 +98,7 @@ def clip(orig):
     except subprocess.CalledProcessError as e:
         return jsonify({"status": "fail", "error": e.stderr.strip()}), 500
 
-# ---------- Serve recordings & downloads -----------------
+# ---------- Serve original files --------------------------------------------
 @app.route("/recordings/<fname>")
 def recordings(fname):
     return send_from_directory(RECDIR, fname)
@@ -119,15 +107,14 @@ def recordings(fname):
 def download(fname):
     return send_from_directory(RECDIR, fname, as_attachment=True)
 
-# ---------- 🔒 Secure link (15‑min) ----------------------
+# ---------- 🔒 Secure link (15 min) -----------------------------------------
 @app.route("/link/secure/<fname>")
 def generate_secure_link(fname):
-    fpath = os.path.join(RECDIR, fname)
-    if not os.path.exists(fpath):
+    if not os.path.exists(os.path.join(RECDIR, fname)):
         return jsonify({"status": "fail", "error": "file not found"}), 404
 
     token = serializer.dumps(fname)
-    url = request.url_root.rstrip("/") + "/secure/" + token
+    url   = request.url_root.rstrip("/") + "/secure/" + token
     return jsonify({"status": "ok", "url": url})
 
 @app.route("/secure/<token>")
@@ -135,43 +122,39 @@ def secure_download(token):
     try:
         fname = serializer.loads(token, max_age=TOKEN_EXPIRY_SECONDS)
     except SignatureExpired:
-        return "⏳ Sorry, this link has expired.", 410
+        return "⏳ Link expired.", 410
     except BadSignature:
-        return "❌ Invalid link.", 400
-
+        return "❌ Invalid link.", 400
     return send_from_directory(RECDIR, fname)
 
-# ---------- 🌐 Public link (permanent) -------------------
+# ---------- 🌐 Public link (permanent) ---------------------------------------
 @app.route("/link/public/<fname>", methods=["GET"])
 def get_or_create_public_link(fname):
     if not os.path.exists(os.path.join(RECDIR, fname)):
         return jsonify({"status": "fail", "error": "File not found"}), 404
 
-    # Reuse existing token if already present
-    for token, file in public_links.items():
-        if file == fname:
+    # Reuse existing token if already shared
+    for token, f in public_links.items():
+        if f == fname:
             url = request.url_root.rstrip("/") + "/public/" + token
             return jsonify({"status": "ok", "url": url})
 
-    # Generate a new 12‑char random token
     token = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
     public_links[token] = fname
     save_links()
-
     return jsonify({"status": "ok", "url": request.url_root.rstrip("/") + "/public/" + token})
 
 @app.route("/link/public/<fname>", methods=["DELETE"])
 def delete_public_link(fname):
     removed = False
-    for token, file in list(public_links.items()):
-        if file == fname:
+    for token, f in list(public_links.items()):
+        if f == fname:
             del public_links[token]
             removed = True
     if removed:
         save_links()
         return jsonify({"status": "ok", "message": "Link removed"})
-    else:
-        return jsonify({"status": "fail", "error": "No public link found"}), 404
+    return jsonify({"status": "fail", "error": "No public link found"}), 404
 
 @app.route("/public/<token>")
 def serve_public_file(token):
@@ -180,7 +163,7 @@ def serve_public_file(token):
         return "❌ Invalid or expired link.", 404
     return send_from_directory(RECDIR, fname)
 
-# ---------- Share link via e‑mail ------------------------
+# ---------- Email sharing ----------------------------------------------------
 @app.route("/send_email", methods=["POST"])
 def send_email():
     data = request.get_json()
@@ -194,12 +177,11 @@ def send_email():
     except Exception as e:
         return jsonify({"status": "fail", "error": str(e)}), 500
 
-# ---------- Simple file‑listing helper -------------------
+# ---------- File listing & deletion -----------------------------------------
 @app.route("/debug/files")
 def list_files():
     return "<br>".join(sorted(os.listdir(RECDIR)))
 
-# ---------- Delete file by name --------------------------
 @app.route("/delete/<filename>", methods=["POST"])
 def delete_file(filename):
     file_path = os.path.join(RECDIR, filename)
@@ -207,5 +189,10 @@ def delete_file(filename):
         return jsonify({"status": "fail", "error": "File not found"}), 404
     try:
         os.remove(file_path)
-       return jsonify({"status": "fail", "error": "Some error message"})
+        return jsonify({"status": "ok", "message": f"{filename} deleted"})
+    except Exception as e:
+        return jsonify({"status": "fail", "error": str(e)}), 500
 
+# ---------- Development entry‑point -----------------------------------------
+if __name__ == "__main__":
+    app.run(debug=True)
