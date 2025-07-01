@@ -133,7 +133,8 @@
   </main>
 
   <!-- Scripts -->
-  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+ <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
+
   <script>
     // Theme toggle logic with localStorage
     const themeToggleBtn = document.getElementById('themeToggle');
