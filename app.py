@@ -75,4 +75,5 @@ def download(fname):
 
 # ── Run locally only ──────────────────────────────────────
 if __name__ == "__main__":
+    os.makedirs("static/recordings", exist_ok=True)
     app.run(debug=True)
