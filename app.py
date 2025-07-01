@@ -141,12 +141,15 @@ def clip(orig):
     return jsonify({"status": "ok", "clip": clip_name})
 
 # ---------------- Serving raw files ------------
-@app.route("/recordings/<fname>");  app.route("/public/<token>")
-def serve_file(fname=None, token=None):
-    if token:                                   # /public/<token>
-        fname = public_links.get(token)
-        if not fname:
-            return "❌ Invalid/expired link.", 404
+@app.route("/recordings/<fname>")
+def recordings(fname):
+    return send_from_directory(RECDIR, fname)
+
+@app.route("/public/<token>")
+def serve_public_file(token):
+    fname = public_links.get(token)
+    if not fname:
+        return "❌ Invalid or expired link.", 404
     return send_from_directory(RECDIR, fname)
 
 # ---------------- Secure 15‑min token -----------
