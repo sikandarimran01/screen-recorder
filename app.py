@@ -50,7 +50,7 @@ def upload():
         video_file.save(save_path)
     except Exception as e:
         print("❌ Save failed:", e)
-        return jsonify({"status": "fail", "error": str(e)}), 500
+           return jsonify({"status": "fail", "error": str(e)}), 500)
 
     # 📢 Return URL that the <video> tag can load
     return jsonify({
