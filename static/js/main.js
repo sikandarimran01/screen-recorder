@@ -49,50 +49,56 @@ document.addEventListener("DOMContentLoaded", () => {
   let fileName = ""; // set after upload
 
   /* ----------  Screen‑record controls  ---------- */
-  startBtn.onclick = async () => {
-  console.log("🎬 Start button clicked");  // ✅ Button click confirmed
+startBtn.onclick = async () => {
+  console.log("🎬 Start button clicked");
   try {
     const stream = await navigator.mediaDevices.getDisplayMedia({
       video: true,
       audio: true,
     });
 
-      mediaRecorder = new MediaRecorder(stream);
-      chunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    chunks = [];
 
-      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+    mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
 
-      mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: "video/webm" });
-        const fd = new FormData();
-        fd.append("video", blob, "recording.webm");
+    mediaRecorder.onstop = async () => {
+      const blob = new Blob(chunks, { type: "video/webm" });
+      const fd = new FormData();
+      fd.append("video", blob, "recording.webm");
 
-        statusMsg.textContent = "⏫ Uploading…";
-        const res = await fetch("/upload", { method: "POST", body: fd }).then((r) => r.json());
-        console.log("📤 Upload result:", res);
+      statusMsg.textContent = "⏫ Uploading…";
 
-        if (res.status === "ok") {
-          fileName = res.filename;
-          const url = fullUrl(fileName);
-          preview.src = url;
-          preview.classList.remove("hidden");
-          shareWrap.classList.remove("hidden");
-          statusMsg.innerHTML = `✅ Saved <a href="${url}" download>Download</a>`;
-        } else {
-          alert("❌ Upload failed");
-        }
-        startBtn.disabled = false;
-      };
+      const res = await fetch("/upload", {
+        method: "POST",
+        body: fd,
+      }).then((r) => r.json());
 
-      mediaRecorder.start();
-      statusMsg.textContent = "🎬 Recording…";
-      startBtn.disabled = true;
-      stopBtn.disabled = false;
-    } catch (err) {
-      console.error(err);
-      alert("Screen‑capture permission denied.");
-    }
-  };
+      console.log("📤 Upload result:", res);  // ✅ add here
+
+      if (res.status === "ok") {
+        fileName = res.filename;
+        const url = fullUrl(fileName);
+        preview.src = url;
+        preview.classList.remove("hidden");
+        shareWrap.classList.remove("hidden");
+        statusMsg.innerHTML = `✅ Saved <a href="${url}" download>Download</a>`;
+      } else {
+        alert("❌ Upload failed");
+      }
+
+      startBtn.disabled = false;
+    };
+
+    mediaRecorder.start();
+    statusMsg.textContent = "🎬 Recording…";
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+  } catch (err) {
+    console.error("❌ Recording error:", err);  // ✅ add here
+    alert("Screen‑capture permission denied.");
+  }
+};
 
   stopBtn.onclick = () => {
     if (mediaRecorder && mediaRecorder.state === "recording") {
