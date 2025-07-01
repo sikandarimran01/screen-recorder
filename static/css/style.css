@@ -283,45 +283,6 @@ dialog input, dialog textarea {
   text-decoration: underline;
 }
 
-/* --- Media Grid for Resumed Recordings --- */
-.media-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 1rem;
-  margin-top: 1rem;
-}
-
-.media-card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--radius);
-  padding: 0.5rem;
-  overflow: hidden;
-  text-align: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.media-card video {
-  width: 100%;
-  height: auto;
-  border-radius: var(--radius);
-  background: #000;
-}
-
-.media-card p {
-  margin-top: 0.5rem;
-  font-size: 0.85rem;
-  color: var(--muted);
-  word-break: break-all;
-}
-
-.media-card:hover {
-  transform: scale(1.02);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-}
-
-
 /* --- Mobile Responsive Adjustments for Session UI --- */
 @media (max-width: 640px) {
   .session-controls {
