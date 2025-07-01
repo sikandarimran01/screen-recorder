@@ -16,9 +16,9 @@ app.config.update(
 mail = Mail(app)
 
 # ── Paths & FFmpeg settings ──────────────────────────────
-EXT = "mp4"          # Use "webm" if needed, but change codecs accordingly
+EXT = "webm"  # Frontend uploads .webm, adjust if using mp4
 FFMPEG = "ffmpeg"
-RECDIR = "/mnt/recordings"  # Make sure Render disk is mounted here
+RECDIR = "/mnt/recordings"
 os.makedirs(RECDIR, exist_ok=True)
 
 # ── Routes ───────────────────────────────────────────────
@@ -34,11 +34,7 @@ def upload():
         return jsonify({"status": "fail", "error": "No file uploaded"}), 400
 
     fname = datetime.datetime.now().strftime("recording_%Y%m%d_%H%M%S.webm")
-   save_path = os.path.join(RECDIR, fname)
-   video_file.save(save_path)
-    print("📁 Saving video to:", save_path)
-
-
+    save_path = os.path.join(RECDIR, fname)
 
     try:
         print("📁 Saving to:", save_path)
@@ -59,6 +55,7 @@ def clip(orig):
     data = request.get_json()
     start = float(data["start"])
     end = float(data["end"])
+
     if start >= end:
         return jsonify({"status": "fail", "error": "start >= end"}), 400
 
@@ -70,13 +67,10 @@ def clip(orig):
     out_path = os.path.join(RECDIR, clip_name)
     duration = end - start
 
-    # MP4 re-encoding (libx264 + aac)
     cmd = [
         FFMPEG, "-hide_banner", "-loglevel", "error",
         "-ss", str(start), "-t", str(duration), "-i", in_path,
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-        "-c:a", "aac", "-b:a", "128k",
-        "-movflags", "+faststart", "-y", out_path
+        "-c", "copy", "-y", out_path
     ]
 
     try:
@@ -84,7 +78,6 @@ def clip(orig):
         return jsonify({"status": "ok", "clip": clip_name})
     except subprocess.CalledProcessError as e:
         return jsonify({"status": "fail", "error": e.stderr.strip()}), 500
-
 
 # ── Serve Files ──────────────────────────────────────────
 @app.route("/recordings/<fname>")
@@ -94,7 +87,6 @@ def recordings(fname):
 @app.route("/download/<fname>")
 def download(fname):
     return send_from_directory(RECDIR, fname, as_attachment=True)
-
 
 # ── Send Email ───────────────────────────────────────────
 @app.route("/send_email", methods=["POST"])
@@ -112,6 +104,7 @@ def send_email():
     except Exception as e:
         return jsonify({"status": "fail", "error": str(e)}), 500
 
+# ── Debug: Show Files ────────────────────────────────────
 @app.route("/debug/files")
 def list_files():
     return "<br>".join(os.listdir(RECDIR))
