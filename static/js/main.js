@@ -53,7 +53,9 @@ startBtn.onclick = async () => {
       fd.append("video", blob, "recording.webm");
 
       statusMsg.textContent = "⏫ Uploading…";
-      const res = await fetch("/upload", { method: "POST", body: fd }).then(r => r.json());
+     const res = await fetch("/upload", { method: "POST", body: fd }).then(r => r.json());
+      console.log("📤 Upload result:", res);
+
 
       if (res.status === "ok") {
         fileName     = res.filename;
