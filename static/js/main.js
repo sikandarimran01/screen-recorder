@@ -4,43 +4,38 @@
 document.addEventListener("DOMContentLoaded", () => {
   /* ----------  Anonymous‑session helper  ---------- */
   const SESSION_KEY = "gs_session";
-  // 1️⃣  try cookie first (set by Flask)  2️⃣  else localStorage
   const cookieMatch = document.cookie.match(/(?:^|;)\s*session=([^;]+)/);
   let session = cookieMatch ? cookieMatch[1] : localStorage.getItem(SESSION_KEY);
   if (!session) {
-    // provisional token – server may replace it on first response
     session = crypto.randomUUID().replace(/-/g, "");
     localStorage.setItem(SESSION_KEY, session);
   }
-  // tiny wrapper: same as window.fetch but always adds header
   const apiFetch = (url, opts = {}) => {
     opts.headers = Object.assign({ "X-Session": session }, opts.headers || {});
     return fetch(url, opts).then(async (r) => {
-      // if server sent a fresher cookie, store it
-      const newMatch = document.cookie.match(/(?:^|;)\s*session=([^;]+)/);
-      if (newMatch) {
-        session = newMatch[1];
+      const m = document.cookie.match(/(?:^|;)\s*session=([^;]+)/);
+      if (m) {
+        session = m[1];
         localStorage.setItem(SESSION_KEY, session);
       }
       return r;
     });
   };
 
-  /* === Quick DOM helper === */
+  /* ----------  DOM helpers & refs  ---------- */
   const $ = (sel) => document.querySelector(sel);
 
-  /* === Element refs === */
-  const startBtn      = $("#startBtn");
-  const stopBtn       = $("#stopBtn");
-  const statusMsg     = $("#statusMsg");
-  const preview       = $("#preview");
+  const startBtn = $("#startBtn");
+  const stopBtn  = $("#stopBtn");
+  const statusMsg= $("#statusMsg");
+  const preview  = $("#preview");
 
-  const shareWrap     = $("#shareWrap");
-  const copyLinkBtn   = $("#copyLink");
-  const copySecure    = $("#copySecure");
-  const copyPublic    = $("#copyPublic");
+  const shareWrap   = $("#shareWrap");
+  const copyLinkBtn = $("#copyLink");
+  const copySecure  = $("#copySecure");
+  const copyPublic  = $("#copyPublic");
   const disablePublic = $("#disablePublic");
-  const shareEmail    = $("#shareEmail");
+  const shareEmail  = $("#shareEmail");
 
   const openClip  = $("#openClip");
   const clipPanel = $("#clipPanel");
@@ -61,7 +56,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const emailClose  = $("#emailClose");
   const emailStatus = $("#emailStatus");
 
-  /* === Helpers === */
+  /* ----------  helpers  ---------- */
   const isLocal  = ["localhost", "127.0.0.1"].includes(location.hostname);
   const REC_BASE = isLocal ? "/static/recordings/" : "/recordings/";
   const fullUrl  = (f) => `${location.origin}${REC_BASE}${f}`;
@@ -69,10 +64,10 @@ document.addEventListener("DOMContentLoaded", () => {
   let mediaRecorder, chunks = [], fileName = "", secureUrl = "";
 
   /* ==========  Recording  ========== */
-startBtn.onclick = async () => {
-       console.log("✅ Start button was clicked"); // ADD THIS
+  startBtn.onclick = async () => {
+    console.log("✅ Start button was clicked");
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video:true,audio:true });
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video:true, audio:true });
       mediaRecorder = new MediaRecorder(stream);
       chunks = [];
 
@@ -80,8 +75,8 @@ startBtn.onclick = async () => {
 
       mediaRecorder.onstop = async () => {
         const blob = new Blob(chunks, { type: "video/webm" });
-       const fd = new FormData();
-       fd.append("video", blob, "recording.webm");
+        const fd   = new FormData();
+        fd.append("video", blob, "recording.webm");
 
         statusMsg.textContent = "⏫ Uploading…";
         const res = await apiFetch("/upload", { method:"POST", body:fd }).then(r=>r.json());
@@ -92,7 +87,7 @@ startBtn.onclick = async () => {
           preview.src = fullUrl(fileName);
           preview.classList.remove("hidden");
           shareWrap.classList.remove("hidden");
-          statusMsg.innerHTML = ✅ Saved – <a href="${fullUrl(fileName)}" download>Download raw</a>;
+          statusMsg.innerHTML = `✅ Saved – <a href="${fullUrl(fileName)}" download>Download raw</a>`;
         } else {
           statusMsg.textContent = "❌ Upload failed: " + res.error;
         }
@@ -114,34 +109,6 @@ startBtn.onclick = async () => {
       mediaRecorder.stop();
       stopBtn.disabled = true;
     }
-  };
-
-  /* ==========  Share links  ========== */
-  copyLinkBtn.onclick = () => {
-    if (!fileName) return alert("⚠ No file yet.");
-    copy(fullUrl(fileName), copyLinkBtn);
-  };
-
-  copySecure?.onclick = async () => {
-    if (!fileName) return alert("⚠ No file yet.");
-    try {
-      const r = await apiFetch(/link/secure/${fileName}).then(x=>x.json());
-      if (r.status === "ok") secureUrl = r.url;
-      copy(secureUrl, copySecure, "✅ Secure link copied (15 min)");
-    } catch { alert("❌ Network error."); }
-  };
-
-  copyPublic?.onclick = async () => {
-    if (!fileName) return alert("⚠ No file yet.");
-    const r = await apiFetch(/link/public/${fileName}).then(x=>x.json());
-    if (r.status === "ok") copy(r.url, copyPublic, "✅ Public link copied");
-    else alert("❌ "+r.error);
-  };
-
-  disablePublic?.onclick = async () => {
-    if (!fileName) return alert("⚠ No file yet.");
-    const r = await apiFetch(/link/public/${fileName}, {method:"DELETE"}).then(x=>x.json());
-    alert(r.status==="ok" ? "✅ Public link disabled." : "❌ "+r.error);
   };
 
   /* ==========  Share links  ========== */
@@ -193,11 +160,12 @@ startBtn.onclick = async () => {
   };
 
   /* ==========  Clip  ========== */
-  openClip.onclick = () => { clipPanel.classList.toggle("hidden"); };
-  clipCancel.onclick = () => { clipPanel.classList.add("hidden"); };
+  openClip.onclick   = () => clipPanel.classList.toggle("hidden");
+  clipCancel.onclick = () => clipPanel.classList.add("hidden");
   clipGo.onclick = async () => {
     const s=+$("#clipStart").value, e=+$("#clipEnd").value;
-    if (!fileName) return alert("⚠ No recording."); if (s>=e) return alert("⚠ Invalid range.");
+    if (!fileName) return alert("⚠ No recording.");
+    if (s>=e)      return alert("⚠ Invalid range.");
     clipGo.disabled=true; clipGo.textContent="⏳ Cutting…";
     const r = await apiFetch(`/clip/${fileName}`,{
       method:"POST",headers:{"Content-Type":"application/json"},
@@ -214,7 +182,7 @@ startBtn.onclick = async () => {
     embedBox.value = iframe(); embedDlg.showModal();
   };
   embedWidth.oninput = embedHeight.oninput = () => embedBox.value = iframe();
-  embedCopy.onclick = () => copy(embedBox.value, embedCopy);
+  embedCopy.onclick  = () => copy(embedBox.value, embedCopy);
   embedClose.onclick = () => embedDlg.close();
 
   /* === utilities === */
@@ -224,8 +192,7 @@ startBtn.onclick = async () => {
   const copy = (txt, btn, msg="✅ Copied!") =>
     navigator.clipboard.writeText(txt).then(()=>{
       const p=btn.textContent; btn.textContent=msg; btn.disabled=true;
-      setTimeout(()=>{btn.textContent=p;btn.disabled=false;},1800);
+      setTimeout(()=>{btn.textContent=p;btn.disabled=false;},1700);
     });
-
 });
 /* ─────────────────────────────────────────────── */
