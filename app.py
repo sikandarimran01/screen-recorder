@@ -70,31 +70,37 @@ def upload():
 
 @app.route("/clip/<orig>", methods=["POST"])
 def clip(orig):
-    data = request.get_json()
-    start = float(data["start"])
-    end = float(data["end"])
+    try:
+        data = request.get_json(force=True)
+        start = float(data["start"])
+        end = float(data["end"])
+    except Exception as e:
+        return jsonify({"status": "fail", "error": f"Invalid JSON: {str(e)}"}), 400
 
     if start >= end:
-        return jsonify({"status": "fail", "error": "start >= end"}), 400
+        return jsonify({"status": "fail", "error": "Start time must be less than end time"}), 400
 
     in_path = os.path.join(RECDIR, orig)
     if not os.path.exists(in_path):
-        return jsonify({"status": "fail", "error": "file not found"}), 404
+        return jsonify({"status": "fail", "error": "Original file not found"}), 404
 
     clip_name = datetime.datetime.now().strftime("clip_%Y%m%d_%H%M%S.webm")
     out_path = os.path.join(RECDIR, clip_name)
     duration = end - start
 
-    cmd = [FFMPEG, "-hide_banner", "-loglevel", "error",
-           "-ss", str(start), "-t", str(duration), "-i", in_path,
-           "-c:v", "libvpx-vp9", "-b:v", "1M",
-           "-c:a", "libopus", "-b:a", "128k", "-y", out_path]
+    cmd = [
+        FFMPEG, "-hide_banner", "-loglevel", "error",
+        "-ss", str(start), "-t", str(duration), "-i", in_path,
+        "-c:v", "libvpx-vp9", "-b:v", "1M",
+        "-c:a", "libopus", "-b:a", "128k",
+        "-y", out_path
+    ]
 
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
         return jsonify({"status": "ok", "clip": clip_name})
     except subprocess.CalledProcessError as e:
-        return jsonify({"status": "fail", "error": e.stderr.strip()}), 500
+        return jsonify({"status": "fail", "error": e.stderr}), 500
 
 @app.route("/recordings/<fname>")
 def recordings(fname):
