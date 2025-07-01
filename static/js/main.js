@@ -10,6 +10,7 @@ const preview     = $('#preview');
 const shareWrap   = $('#shareWrap');
 const copyLinkBtn = $('#copyLink');
 const shareEmail  = $('#shareEmail');
+const secureLinkBtn = $('#secureLink');
 
 const openClip    = $('#openClip');
 const clipPanel   = $('#clipPanel');
@@ -53,13 +54,12 @@ startBtn.onclick = async () => {
       fd.append("video", blob, "recording.webm");
 
       statusMsg.textContent = "⏫ Uploading…";
-     const res = await fetch("/upload", { method: "POST", body: fd }).then(r => r.json());
+      const res = await fetch("/upload", { method: "POST", body: fd }).then(r => r.json());
       console.log("📤 Upload result:", res);
-
 
       if (res.status === "ok") {
         fileName     = res.filename;
-        const url    = fullUrl(fileName);        // ✔ unified path
+        const url    = fullUrl(fileName);
         preview.src  = url;
         preview.classList.remove("hidden");
         shareWrap.classList.remove("hidden");
@@ -87,10 +87,32 @@ stopBtn.onclick = () => {
   }
 };
 
-/* ----------  Share: copy link  ---------- */
+/* ----------  Share: copy full link  ---------- */
 copyLinkBtn.onclick = () => {
   if (!fileName) return alert("⚠ No file to share yet.");
   copyToClipboard(fullUrl(fileName), copyLinkBtn);
+};
+
+/* ----------  Secure Share Link (15 min)  ---------- */
+secureLinkBtn.onclick = async () => {
+  if (!fileName) return alert("⚠ No recording available.");
+
+  secureLinkBtn.disabled = true;
+  secureLinkBtn.textContent = "⏳ Generating…";
+
+  try {
+    const res = await fetch(`/link/secure/${fileName}`).then(r => r.json());
+    if (res.status === "ok") {
+      copyToClipboard(res.url, secureLinkBtn, "✅ Secure link copied!");
+    } else {
+      alert("❌ Failed: " + res.error);
+    }
+  } catch (e) {
+    alert("❌ Network error");
+  } finally {
+    secureLinkBtn.textContent = "🔒 Copy Secure Link";
+    secureLinkBtn.disabled = false;
+  }
 };
 
 /* ----------  Email modal  ---------- */
@@ -160,19 +182,19 @@ clipGo.onclick = async () => {
     body   : JSON.stringify({ start, end })
   }).then(r => r.json());
 
-if (res.status === "ok") {
-const url = `${location.origin}/recordings/${fileName}`;
-  copyToClipboard(url, clipGo, "✅ Clip link copied!");
+  if (res.status === "ok") {
+    const url = `${location.origin}/recordings/${fileName}`;
+    copyToClipboard(url, clipGo, "✅ Clip link copied!");
 
-  setTimeout(() => {
-    clipGo.textContent = "📤 Share Clip";
+    setTimeout(() => {
+      clipGo.textContent = "📤 Share Clip";
+      clipGo.disabled = false;
+    }, 2000);
+  } else {
+    alert("❌ Clip failed: " + res.error);
     clipGo.disabled = false;
-  }, 2000);  // re-enable after 2s
-} else {
-  alert("❌ Clip failed: " + res.error);
-  clipGo.disabled = false;
-  clipGo.textContent = "📤 Share Clip";
-}
+    clipGo.textContent = "📤 Share Clip";
+  }
 };
 
 /* ----------  Embed modal  ---------- */
