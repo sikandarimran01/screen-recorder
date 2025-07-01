@@ -49,7 +49,7 @@ def clip(orig):
     clip_name = datetime.datetime.now().strftime("clip_%Y%m%d_%H%M%S.") + EXT
     out_path  = os.path.join(RECDIR, clip_name)
     cmd = [FFMPEG, "-hide_banner", "-loglevel", "error",
-           "-ss", str(start), "-to", str(end), "-i", in_path,
+           "-ss", str(start), "-t", str(end), "-i", in_path,
            "-c", "copy", "-y", out_path]
     subprocess.run(cmd, check=True)
     return jsonify({"status": "ok", "clip": clip_name})
