@@ -48,14 +48,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const clipGo     = $("#clipGo");
   const clipCancel = $("#clipCancel");
 
-  const openEmbed  = $("#openEmbed");
-  const embedDlg   = $("#embedModal");
-  const embedWidth = $("#embedWidth");
-  const embedHeight= $("#embedHeight");
-  const embedBox   = $("#embedCode");
-  const embedCopy  = $("#embedCopy");
-  const embedClose = $("#embedClose");
-
   const emailDlg   = $("#emailModal");
   const emailInput = $("#emailTo");
   const emailSend  = $("#emailSend");
