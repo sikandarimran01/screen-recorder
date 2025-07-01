@@ -70,6 +70,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /* ==========  Recording  ========== */
   startBtn.onclick = async () => {
+       console.log("✅ Start button was clicked"); // ADD THIS
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({ video:true,audio:true });
       mediaRecorder = new MediaRecorder(stream);
