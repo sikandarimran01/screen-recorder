@@ -187,16 +187,6 @@ document.addEventListener("DOMContentLoaded", () => {
     clipGo.disabled = false; clipGo.textContent = "📤 Share Clip";
   });
 
-  /* ----------  EMBED ---------- */
-  openEmbed?.addEventListener("click", () => {
-    if (!fileName) return alert("⚠ No recording.");
-    embedBox.value = iframe(); embedDlg.showModal();
-  });
-  embedWidth?.addEventListener("input", () => embedBox.value = iframe());
-  embedHeight?.addEventListener("input", () => embedBox.value = iframe());
-  embedCopy?.addEventListener("click", () => copy(embedBox.value, embedCopy));
-  embedClose?.addEventListener("click", () => embedDlg.close());
-
   /* ----------  SESSION controls ---------- */
   resumeBtn?.addEventListener("click", () => filesPanel.classList.toggle("hidden"));
   forgetBtn?.addEventListener("click", async () => {
