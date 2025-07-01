@@ -34,7 +34,11 @@ def upload():
         return jsonify({"status": "fail", "error": "No file uploaded"}), 400
 
     fname = datetime.datetime.now().strftime("recording_%Y%m%d_%H%M%S.webm")
-    save_path = os.path.join(RECDIR, fname)
+   save_path = os.path.join(RECDIR, fname)
+   video_file.save(save_path)
+    print("📁 Saving video to:", save_path)
+
+
 
     try:
         print("📁 Saving to:", save_path)
