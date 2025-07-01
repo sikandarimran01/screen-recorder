@@ -1,9 +1,9 @@
 from flask import (
     Flask, render_template, request, jsonify,
-    send_from_directory
+    send_from_directory, make_response
 )
 from flask_mail import Mail, Message
-import datetime, os, subprocess, json, random, string
+import datetime, os, subprocess, json, random, string, uuid
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 app = Flask(__name__)
@@ -33,6 +33,8 @@ os.makedirs(RECDIR, exist_ok=True)
 
 # ── Persistent public link storage ──────────────────────
 LINKS_FILE = "public_links.json"
+SESSIONS_FILE = "user_sessions.json"
+
 if os.path.exists(LINKS_FILE):
     with open(LINKS_FILE, "r") as f:
         public_links = json.load(f)
@@ -42,6 +44,16 @@ else:
 def save_links():
     with open(LINKS_FILE, "w") as f:
         json.dump(public_links, f)
+
+if os.path.exists(SESSIONS_FILE):
+    with open(SESSIONS_FILE, "r") as f:
+        user_sessions = json.load(f)
+else:
+    user_sessions = {}
+
+def save_sessions():
+    with open(SESSIONS_FILE, "w") as f:
+        json.dump(user_sessions, f)
 
 # ─────────────────────────────────────────────────────────
 # Routes
@@ -65,8 +77,35 @@ def upload():
     except Exception as e:
         return jsonify({"status": "fail", "error": str(e)}), 500
 
-    return jsonify({"status": "ok", "filename": fname, "url": f"/recordings/{fname}"})
+    # Handle token/session
+    token = request.cookies.get("magic_token")
+    if not token or token not in user_sessions:
+        token = uuid.uuid4().hex[:16]
+        user_sessions[token] = []
 
+    user_sessions[token].append(fname)
+    save_sessions()
+
+    response = jsonify({"status": "ok", "filename": fname, "url": f"/recordings/{fname}"})
+    response.set_cookie("magic_token", token, max_age=365*24*60*60)
+    return response
+
+@app.route("/session/files")
+def session_files():
+    token = request.cookies.get("magic_token")
+    if not token or token not in user_sessions:
+        return jsonify({"status": "empty", "files": []})
+    return jsonify({"status": "ok", "files": user_sessions[token]})
+
+@app.route("/session/forget", methods=["POST"])
+def forget_session():
+    token = request.cookies.get("magic_token")
+    if token and token in user_sessions:
+        del user_sessions[token]
+        save_sessions()
+    response = jsonify({"status": "ok"})
+    response.set_cookie("magic_token", "", expires=0)
+    return response
 
 @app.route("/clip/<orig>", methods=["POST"])
 def clip(orig):
