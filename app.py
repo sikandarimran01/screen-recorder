@@ -51,13 +51,14 @@ def clip(orig):
     clip_name = datetime.datetime.now().strftime("clip_%Y%m%d_%H%M%S.") + EXT
     out_path  = os.path.join(RECDIR, clip_name)
 
-    duration  = end - start           # ✅ use duration, not absolute end‑time
+    duration = end - start
     cmd = [
         FFMPEG, "-hide_banner", "-loglevel", "error",
         "-ss", str(start),
-        "-t",  str(duration),          # << duration in seconds
+        "-t", str(duration),
         "-i", in_path,
-        "-c", "copy",
+        "-c:v", "libvpx",           # ✅ VP8 video
+        "-c:a", "libvorbis",        # ✅ Vorbis audio
         "-y", out_path
     ]
 
@@ -65,8 +66,8 @@ def clip(orig):
         subprocess.run(cmd, check=True, capture_output=True, text=True)
         return jsonify({"status": "ok", "clip": clip_name})
     except subprocess.CalledProcessError as e:
-        # send ffmpeg stderr back for easier debugging
         return jsonify({"status": "fail", "error": e.stderr.strip()}), 500
+
 
 # Direct download
 @app.route("/download/<fname>")
