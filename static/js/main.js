@@ -1,35 +1,44 @@
-/* ------------- DOM helpers ------------- */
-const $ = s => document.querySelector(s);
+/* =============   DOM helpers   ============= */
+const $ = sel => document.querySelector(sel);
 
-/* ------------- Elements --------------- */
+/* =============   Elements   ================ */
 const startBtn    = $('#startBtn');
 const stopBtn     = $('#stopBtn');
 const statusMsg   = $('#statusMsg');
 const preview     = $('#preview');
+
 const shareWrap   = $('#shareWrap');
 const copyLinkBtn = $('#copyLink');
 const shareEmail  = $('#shareEmail');
+
 const openClip    = $('#openClip');
-const openEmbed   = $('#openEmbed');
 const clipPanel   = $('#clipPanel');
 const clipGo      = $('#clipGo');
 const clipCancel  = $('#clipCancel');
+
+const openEmbed   = $('#openEmbed');
 const embedDlg    = $('#embedModal');
 const embedWidth  = $('#embedWidth');
 const embedHeight = $('#embedHeight');
 const embedBox    = $('#embedCode');
 const embedCopy   = $('#embedCopy');
 const embedClose  = $('#embedClose');
+
 const emailDlg    = $('#emailModal');
 const emailInput  = $('#emailTo');
 const emailSend   = $('#emailSend');
 const emailClose  = $('#emailClose');
 const emailStatus = $('#emailStatus');
 
-let mediaRecorder, chunks = [];
-let fileName = "";          // will be set after upload
+/* ----------  Helpers: recording base path ---------- */
+const isLocal   = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+const REC_BASE  = isLocal ? '/static/recordings/' : '/recordings/';
+const fullUrl   = fname => `${location.origin}${REC_BASE}${fname}`;
 
-/* ---------- Screen‑record controls ---------- */
+let mediaRecorder, chunks = [];
+let fileName = "";          // set after upload
+
+/* ----------  Screen‑record controls  ---------- */
 startBtn.onclick = async () => {
   try {
     const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
@@ -40,16 +49,16 @@ startBtn.onclick = async () => {
 
     mediaRecorder.onstop = async () => {
       const blob = new Blob(chunks, { type: "video/webm" });
-      const fd = new FormData();
+      const fd   = new FormData();
       fd.append("video", blob, "recording.webm");
 
       statusMsg.textContent = "⏫ Uploading…";
       const res = await fetch("/upload", { method: "POST", body: fd }).then(r => r.json());
 
       if (res.status === "ok") {
-        fileName = res.filename;
-        const url = res.url;               // e.g. /static/recordings/recording_....webm
-        preview.src = url;
+        fileName     = res.filename;
+        const url    = fullUrl(fileName);        // ✔ unified path
+        preview.src  = url;
         preview.classList.remove("hidden");
         shareWrap.classList.remove("hidden");
         statusMsg.innerHTML = `✅ Saved <a href="${url}" download>Download</a>`;
@@ -76,16 +85,16 @@ stopBtn.onclick = () => {
   }
 };
 
-/* ---------- Share options ---------- */
+/* ----------  Share: copy link  ---------- */
 copyLinkBtn.onclick = () => {
   if (!fileName) return alert("⚠ No file to share yet.");
-  copyToClipboard(`${location.origin}/static/recordings/${fileName}`, copyLinkBtn);
+  copyToClipboard(fullUrl(fileName), copyLinkBtn);
 };
 
-/* ---------- Email modal ---------- */
+/* ----------  Email modal  ---------- */
 shareEmail.onclick = () => {
   if (!fileName) return alert("⚠ No recording available.");
-  emailInput.value = "";
+  emailInput.value     = "";
   emailStatus.textContent = "";
   emailDlg.showModal();
 };
@@ -94,19 +103,18 @@ emailClose.onclick = () => emailDlg.close();
 emailSend.onclick = async () => {
   const to = emailInput.value.trim();
   if (!to) {
-    emailStatus.textContent = "❌ Please enter a valid e‑mail address.";
+    emailStatus.textContent = "❌ Please enter a valid e‑mail.";
     emailStatus.style.color = "var(--danger)";
     return;
   }
   emailSend.disabled = true;
   emailSend.textContent = "⏳ Sending…";
-  const url = `${location.origin}/static/recordings/${fileName}`;
 
   try {
     const res = await fetch("/send_email", {
-      method: "POST",
+      method : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to, url })
+      body   : JSON.stringify({ to, url: fullUrl(fileName) })
     }).then(r => r.json());
 
     if (res.status === "ok") {
@@ -125,7 +133,7 @@ emailSend.onclick = async () => {
   }
 };
 
-/* ---------- Clip panel ---------- */
+/* ----------  Clip panel  ---------- */
 openClip.onclick = () => {
   const hidden = clipPanel.classList.toggle("hidden");
   clipPanel.classList.toggle("fade-in", !hidden);
@@ -138,21 +146,20 @@ clipCancel.onclick = () => {
 clipGo.onclick = async () => {
   const start = +$("#clipStart").value;
   const end   = +$("#clipEnd").value;
-  if (!fileName) return alert("⚠ No recording to clip.");
-  if (start >= end) return alert("⚠ Invalid range.");
+  if (!fileName)        return alert("⚠ No recording to clip.");
+  if (start >= end)     return alert("⚠ Invalid range.");
 
   clipGo.disabled = true;
   clipGo.textContent = "⏳ Cutting…";
 
   const res = await fetch(`/clip/${fileName}`, {
-    method: "POST",
+    method : "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ start, end })
+    body   : JSON.stringify({ start, end })
   }).then(r => r.json());
 
   if (res.status === "ok") {
-    const url = `${location.origin}/static/recordings/${res.clip}`;
-    copyToClipboard(url, clipGo, "✅ Clip link copied!");
+    copyToClipboard(fullUrl(res.clip), clipGo, "✅ Clip link copied!");
   } else {
     alert("❌ Clip failed: " + res.error);
     clipGo.disabled = false;
@@ -160,19 +167,19 @@ clipGo.onclick = async () => {
   }
 };
 
-/* ---------- Embed modal ---------- */
+/* ----------  Embed modal  ---------- */
 openEmbed.onclick = () => {
   if (!fileName) return alert("⚠ No recording to embed.");
   embedBox.value = makeIframe();
   embedDlg.showModal();
 };
 embedWidth.oninput = embedHeight.oninput = () => embedBox.value = makeIframe();
-embedCopy.onclick = () => copyToClipboard(embedBox.value, embedCopy, "✅ Copied!");
+embedCopy.onclick  = () => copyToClipboard(embedBox.value, embedCopy, "✅ Copied!");
 embedClose.onclick = () => embedDlg.close();
 
-/* ---------- Helpers ---------- */
+/* ----------  Helpers  ---------- */
 function makeIframe() {
-  return `<iframe width="${embedWidth.value}" height="${embedHeight.value}" src="${location.origin}/static/recordings/${fileName}" frameborder="0" allowfullscreen></iframe>`;
+  return `<iframe width="${embedWidth.value}" height="${embedHeight.value}" src="${fullUrl(fileName)}" frameborder="0" allowfullscreen></iframe>`;
 }
 function copyToClipboard(text, btn, ok = "✅ Copied!") {
   navigator.clipboard.writeText(text).then(() => {
