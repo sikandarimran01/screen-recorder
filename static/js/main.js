@@ -43,6 +43,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const fullUrl  = (fname) => `${location.origin}${REC_BASE}${fname}`;
 
   let mediaRecorder, chunks = [], fileName = "";
+  let secureUrl = "";   // full https:// link returned by /upload
 
   /* ========== Screen‑record controls ========== */
   startBtn.onclick = async () => {
@@ -71,12 +72,17 @@ document.addEventListener("DOMContentLoaded", () => {
         console.log("📤 Upload result:", res);
 
         if (res.status === "ok") {
-          fileName = res.filename;
-          const url = fullUrl(fileName);
-          preview.src = url;
+          fileName  = res.filename;
+          secureUrl = res.url;              // absolute /secure/<token> link
+
+          // Use raw path for preview (won’t expire)
+          const raw = fullUrl(fileName);
+          preview.src = raw;
           preview.classList.remove("hidden");
           shareWrap.classList.remove("hidden");
-          statusMsg.innerHTML = `✅ Saved <a href="${url}" download>Download</a>`;
+
+          statusMsg.innerHTML =
+            `✅ Saved – <a href="${raw}" download>Download raw</a>`;
         } else {
           statusMsg.textContent = "❌ Upload failed: " + res.error;
         }
@@ -107,21 +113,15 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   copySecure?.addEventListener("click", async () => {
-    if (!fileName) {
-      alert("⚠ No file to share yet.");
-      return;
-    }
+    if (!fileName) return alert("⚠ No file to share yet.");
+    // we already have secureUrl from /upload; refresh if user insists
     try {
       const res = await fetch(`/link/secure/${fileName}`).then((r) => r.json());
-      console.log("🔐 Secure link response:", res);
-      if (res.status === "ok") {
-        copyToClipboard(res.url, copySecure, "✅ Secure link copied (15 min)");
-      } else {
-        alert("❌ " + res.error);
-      }
+      secureUrl = res.status === "ok" ? res.url : secureUrl;
+      copyToClipboard(secureUrl, copySecure, "✅ Secure link copied (15 min)");
     } catch (err) {
       console.error("❌ Secure link error:", err);
-      alert("❌ Network error");
+      alert("❌ Could not generate secure link");
     }
   });
 
@@ -165,7 +165,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const res = await fetch("/send_email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to, url: fullUrl(fileName) }),
+        body: JSON.stringify({ to, url: secureUrl || fullUrl(fileName) }),
       }).then((r) => r.json());
 
       emailStatus.textContent =
