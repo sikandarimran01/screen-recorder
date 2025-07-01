@@ -40,13 +40,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const emailStatus = $("#emailStatus");
 
   /* ----------  Helpers: recording base path ---------- */
-  const isLocal  =
-    location.hostname === "localhost" || location.hostname === "127.0.0.1";
+  const isLocal  = ["localhost", "127.0.0.1"].includes(location.hostname);
   const REC_BASE = isLocal ? "/static/recordings/" : "/recordings/";
   const fullUrl  = (fname) => `${location.origin}${REC_BASE}${fname}`;
 
-  let mediaRecorder,
-    chunks = [];
+  let mediaRecorder;
+  let chunks = [];
   let fileName = ""; // set after upload
 
   /* ----------  Screen‑record controls  ---------- */
@@ -67,10 +66,7 @@ document.addEventListener("DOMContentLoaded", () => {
         fd.append("video", blob, "recording.webm");
 
         statusMsg.textContent = "⏫ Uploading…";
-        const res = await fetch("/upload", {
-          method: "POST",
-          body: fd,
-        }).then((r) => r.json());
+        const res = await fetch("/upload", { method: "POST", body: fd }).then((r) => r.json());
         console.log("📤 Upload result:", res);
 
         if (res.status === "ok") {
@@ -112,12 +108,25 @@ document.addEventListener("DOMContentLoaded", () => {
   /* ----------  🔒 Secure Link (15‑min)  ---------- */
   copySecure &&
     (copySecure.onclick = async () => {
-      if (!fileName) return alert("⚠ No file to share yet.");
-      const res = await fetch(`/link/secure/${fileName}`).then((r) => r.json());
-      if (res.status === "ok") {
-        copyToClipboard(res.url, copySecure, "✅ Secure link copied (15 min)");
-      } else {
-        alert("❌ " + res.error);
+      if (!fileName) {
+        alert("⚠ No file to share yet.");
+        console.warn("❌ Secure link clicked with empty fileName");
+        return;
+      }
+
+      try {
+        const res = await fetch(`/link/secure/${fileName}`).then((r) => r.json());
+        console.log("🔐 Secure link response:", res);
+
+        if (res.status === "ok") {
+          copyToClipboard(res.url, copySecure, "✅ Secure link copied (15 min)");
+        } else {
+          console.error("❌ Secure link error from server:", res.error);
+          alert("❌ " + res.error);
+        }
+      } catch (err) {
+        console.error("❌ Secure link fetch failed:", err);
+        alert("❌ Network error");
       }
     });
 
@@ -200,66 +209,4 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   clipGo.onclick = async () => {
-    const start = +$("#clipStart").value;
-    const end = +$("#clipEnd").value;
-    if (!fileName) return alert("⚠ No recording to clip.");
-    if (start >= end) return alert("⚠ Invalid range.");
-
-    clipGo.disabled = true;
-    clipGo.textContent = "⏳ Cutting…";
-
-    const res = await fetch(`/clip/${fileName}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ start, end }),
-    }).then((r) => r.json());
-
-    if (res.status === "ok") {
-      const url = `${location.origin}/recordings/${fileName}`;
-      copyToClipboard(url, clipGo, "✅ Clip link copied!");
-
-      setTimeout(() => {
-        clipGo.textContent = "📤 Share Clip";
-        clipGo.disabled = false;
-      }, 2000);
-    } else {
-      alert("❌ Clip failed: " + res.error);
-      clipGo.disabled = false;
-      clipGo.textContent = "📤 Share Clip";
-    }
-  };
-
-  /* ----------  Embed modal  ---------- */
-  openEmbed.onclick = () => {
-    if (!fileName) return alert("⚠ No recording to embed.");
-    embedBox.value = makeIframe();
-    embedDlg.showModal();
-  };
-  embedWidth.oninput = embedHeight.oninput = () =>
-    (embedBox.value = makeIframe());
-  embedCopy.onclick = () => copyToClipboard(embedBox.value, embedCopy, "✅ Copied!");
-  embedClose.onclick = () => embedDlg.close();
-
-  /* ----------  Helpers  ---------- */
-  function makeIframe() {
-    return `<iframe width="${embedWidth.value}" height="${embedHeight.value}" src="${fullUrl(
-      fileName
-    )}" frameborder="0" allowfullscreen></iframe>`;
-  }
-
-  function copyToClipboard(text, btn, msg = "✅ Copied!") {
-    navigator.clipboard
-      .writeText(text)
-      .then(() => {
-        const prev = btn.textContent;
-        btn.textContent = msg;
-        btn.disabled = true;
-        setTimeout(() => {
-          btn.textContent = prev;
-          btn.disabled = false;
-        }, 2000);
-      })
-      .catch(() => alert("❌ Copy failed"));
-  }
-});
-/* ─────────────────────────────────────────────── */
+    const start = +$("#clipStart").
