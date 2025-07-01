@@ -160,13 +160,19 @@ clipGo.onclick = async () => {
     body   : JSON.stringify({ start, end })
   }).then(r => r.json());
 
-  if (res.status === "ok") {
-    copyToClipboard(fullUrl(res.clip), clipGo, "✅ Clip link copied!");
-  } else {
-    alert("❌ Clip failed: " + res.error);
-    clipGo.disabled = false;
+if (res.status === "ok") {
+  const url = `${location.origin}/recordings/${res.clip}`;
+  copyToClipboard(url, clipGo, "✅ Clip link copied!");
+
+  setTimeout(() => {
     clipGo.textContent = "📤 Share Clip";
-  }
+    clipGo.disabled = false;
+  }, 2000);  // re-enable after 2s
+} else {
+  alert("❌ Clip failed: " + res.error);
+  clipGo.disabled = false;
+  clipGo.textContent = "📤 Share Clip";
+}
 };
 
 /* ----------  Embed modal  ---------- */
