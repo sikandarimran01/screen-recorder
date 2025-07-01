@@ -34,64 +34,47 @@ def index():
         year=datetime.datetime.now().year
     )
 
+# ── Paths & FFmpeg settings ──────────────────────────────
+EXT    = "webm"        # or "mp4"
+FFMPEG = "ffmpeg"
+RECDIR = "/mnt/recordings"
+os.makedirs(RECDIR, exist_ok=True)
 
-# ---------- Upload (browser → server) -------------------
-@app.route("/upload", methods=["POST"])
-def upload():
-    video_file = request.files["video"]
-    fname = datetime.datetime.now().strftime(
-        f"recording_%Y%m%d_%H%M%S.{EXT}"
-    )
-    save_path = os.path.join(RECDIR, fname)
+# … upload() stays the same …
 
-    try:
-        print("📁 Saving to:", save_path)
-        video_file.save(save_path)
-    except Exception as e:
-        return jsonify({"status": "fail", "error": str(e)}), 500
-
-    return jsonify({
-        "status":   "ok",
-        "filename": fname,
-        "url":      f"/recordings/{fname}"
-    })
-
-
-# ---------- Clip with FFmpeg (copy stream) --------------
 @app.route("/clip/<orig>", methods=["POST"])
 def clip(orig):
-    data         = request.get_json()
-    start, end   = map(float, (data["start"], data["end"]))
-
+    data   = request.get_json()
+    start  = float(data["start"])
+    end    = float(data["end"])
     if start >= end:
-        return jsonify({"status": "fail", "error": "start >= end"}), 400
+        return jsonify({"status":"fail","error":"start>=end"}), 400
 
     in_path = os.path.join(RECDIR, orig)
     if not os.path.exists(in_path):
-        return jsonify({"status": "fail", "error": "file not found"}), 404
+        return jsonify({"status":"fail","error":"file not found"}), 404
 
-    clip_name = datetime.datetime.now().strftime(
-        "clip_%Y%m%d_%H%M%S."
-    ) + EXT
+    clip_name = datetime.datetime.now().strftime("clip_%Y%m%d_%H%M%S.") + EXT
     out_path  = os.path.join(RECDIR, clip_name)
     duration  = end - start
 
-    cmd = [
-        FFMPEG, "-hide_banner", "-loglevel", "error",
-        "-ss", str(start),           # fast seek
-        "-t",  str(duration),
-        "-i",  in_path,
-        "-c:v", "libvpx",      # ✅ VP8 for video (WebM-safe)
-       "-c:a", "libvorbis",   # ✅ Vorbis for audio (WebM-safe)
-        "-y",  out_path
-    ]
+    if EXT == "webm":
+        cmd = [FFMPEG, "-hide_banner", "-loglevel", "error",
+               "-ss", str(start), "-t", str(duration), "-i", in_path,
+               "-c", "copy", "-y", out_path]
+    else:  # mp4
+        cmd = [FFMPEG, "-hide_banner", "-loglevel", "error",
+               "-ss", str(start), "-t", str(duration), "-i", in_path,
+               "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+               "-c:a", "aac", "-b:a", "128k",
+               "-movflags", "+faststart", "-y", out_path]
 
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
-        return jsonify({"status": "ok", "clip": clip_name})
+        return jsonify({"status":"ok","clip":clip_name})
     except subprocess.CalledProcessError as e:
-        # return full stderr so you can see codec issues
-        return jsonify({"status": "fail", "error": e.stderr.strip()}), 500
+        return jsonify({"status":"fail","error":e.stderr.strip()}), 500
+
 
 
 # ---------- Serve recordings & downloads ----------------
