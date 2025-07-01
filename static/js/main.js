@@ -1,9 +1,47 @@
 /* ───────────────────────────────────────────────
-   main.js  –  full file (replace current version)
+   main.js – full file (replace current version)
    ─────────────────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", () => {
   /* === Quick DOM helper === */
   const $ = (sel) => document.querySelector(sel);
+
+  /* === Mobile / tablet guard =================== */
+  const isTouch = /Mobi|Android|iPad|iPhone/i.test(navigator.userAgent);
+  if (isTouch) {
+    // Disable recorder UI
+    $("#startBtn")?.setAttribute("disabled", "true");
+
+    // Simple branded overlay
+    const blocker = document.createElement("div");
+    blocker.style.cssText = `
+      position:fixed; inset:0; background:#000000d9;
+      display:flex; justify-content:center; align-items:center;
+      z-index:9999; font-family:system-ui, sans-serif; color:#fff;
+      text-align:center; padding:2rem;
+    `;
+    blocker.innerHTML = `
+      <div style="
+        max-width:420px; background:#1f1f1f; border-radius:14px;
+        padding:2rem 1.75rem; box-shadow:0 0 18px #000;
+      ">
+        <h2 style="font-size:1.45rem; margin-bottom:1rem;">
+          📵 Not Supported on Mobile
+        </h2>
+        <p style="font-size:1rem; line-height:1.55;">
+          Screen recording isn’t available on phones or tablets.<br>
+          Please switch to a desktop or laptop browser for full functionality.
+        </p>
+        <button style="
+          margin-top:1.75rem; padding:0.8rem 1.6rem; border:none;
+          background:#00c896; color:#fff; border-radius:8px;
+          font-size:1rem; cursor:pointer;">
+          🔁 Got it — I’ll try on desktop
+        </button>
+      </div>
+    `;
+    blocker.querySelector("button").onclick = () => blocker.remove();
+    document.body.appendChild(blocker);
+  }
 
   /* === Element refs === */
   const startBtn      = $("#startBtn");
@@ -13,14 +51,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const shareWrap     = $("#shareWrap");
   const copyLinkBtn   = $("#copyLink");
-  const copySecure    = $("#copySecure");   // 🔒 15‑min link
-  const copyPublic    = $("#copyPublic");   // 🌐 permanent link
+  const copySecure    = $("#copySecure");
+  const copyPublic    = $("#copyPublic");
   const disablePublic = $("#disablePublic");
   const shareEmail    = $("#shareEmail");
 
-  const openClip  = $("#openClip");
-  const clipPanel = $("#clipPanel");
-  const clipGo    = $("#clipGo");
+  const openClip   = $("#openClip");
+  const clipPanel  = $("#clipPanel");
+  const clipGo     = $("#clipGo");
   const clipCancel = $("#clipCancel");
 
   const openEmbed  = $("#openEmbed");
@@ -43,10 +81,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const fullUrl  = (fname) => `${location.origin}${REC_BASE}${fname}`;
 
   let mediaRecorder, chunks = [], fileName = "";
-  let secureUrl = "";   // full https:// link returned by /upload
+  let secureUrl = ""; // will hold /secure/<token> link
 
   /* ========== Screen‑record controls ========== */
-  startBtn.onclick = async () => {
+  startBtn?.addEventListener("click", async () => {
     console.log("🎬 Start button clicked");
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -67,20 +105,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
         statusMsg.textContent = "⏫ Uploading…";
         const res = await fetch("/upload", { method: "POST", body: fd })
-                           .then((r) => r.json());
-
+                            .then((r) => r.json());
         console.log("📤 Upload result:", res);
 
         if (res.status === "ok") {
           fileName  = res.filename;
-          secureUrl = res.url;              // absolute /secure/<token> link
+          secureUrl = res.url; // absolute secure link
 
-          // Use raw path for preview (won’t expire)
           const raw = fullUrl(fileName);
           preview.src = raw;
           preview.classList.remove("hidden");
           shareWrap.classList.remove("hidden");
-
           statusMsg.innerHTML =
             `✅ Saved – <a href="${raw}" download>Download raw</a>`;
         } else {
@@ -97,24 +132,23 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error("❌ Recording error:", err);
       alert("Screen‑capture permission denied.");
     }
-  };
+  });
 
-  stopBtn.onclick = () => {
+  stopBtn?.addEventListener("click", () => {
     if (mediaRecorder?.state === "recording") {
       mediaRecorder.stop();
       stopBtn.disabled = true;
     }
-  };
+  });
 
   /* ========== Share links ========== */
-  copyLinkBtn.onclick = () => {
+  copyLinkBtn?.addEventListener("click", () => {
     if (!fileName) return alert("⚠ No file to share yet.");
     copyToClipboard(fullUrl(fileName), copyLinkBtn);
-  };
+  });
 
   copySecure?.addEventListener("click", async () => {
     if (!fileName) return alert("⚠ No file to share yet.");
-    // we already have secureUrl from /upload; refresh if user insists
     try {
       const res = await fetch(`/link/secure/${fileName}`).then((r) => r.json());
       secureUrl = res.status === "ok" ? res.url : secureUrl;
@@ -143,15 +177,15 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   /* ========== Email modal ========== */
-  shareEmail.onclick = () => {
+  shareEmail?.addEventListener("click", () => {
     if (!fileName) return alert("⚠ No recording available.");
     emailInput.value = "";
     emailStatus.textContent = "";
     emailDlg.showModal();
-  };
-  emailClose.onclick = () => emailDlg.close();
+  });
+  emailClose?.addEventListener("click", () => emailDlg.close());
 
-  emailSend.onclick = async () => {
+  emailSend?.addEventListener("click", async () => {
     const to = emailInput.value.trim();
     if (!to) {
       emailStatus.textContent = "❌ Please enter a valid e‑mail.";
@@ -179,19 +213,19 @@ document.addEventListener("DOMContentLoaded", () => {
       emailSend.disabled = false;
       emailSend.textContent = "📤 Send";
     }
-  };
+  });
 
   /* ========== Clip panel ========== */
-  openClip.onclick = () => {
+  openClip?.addEventListener("click", () => {
     const hidden = clipPanel.classList.toggle("hidden");
     clipPanel.classList.toggle("fade-in", !hidden);
-  };
-  clipCancel.onclick = () => {
+  });
+  clipCancel?.addEventListener("click", () => {
     clipPanel.classList.add("hidden");
     clipPanel.classList.remove("fade-in");
-  };
+  });
 
-  clipGo.onclick = async () => {
+  clipGo?.addEventListener("click", async () => {
     const start = +$("#clipStart").value;
     const end   = +$("#clipEnd").value;
     if (!fileName) return alert("⚠ No recording to clip.");
@@ -214,19 +248,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     clipGo.disabled = false;
     clipGo.textContent = "📤 Share Clip";
-  };
+  });
 
   /* ========== Embed modal ========== */
-  openEmbed.onclick = () => {
+  openEmbed?.addEventListener("click", () => {
     if (!fileName) return alert("⚠ No recording to embed.");
     embedBox.value = makeIframe();
     embedDlg.showModal();
-  };
+  });
   embedWidth.oninput = embedHeight.oninput = () =>
     (embedBox.value = makeIframe());
-  embedCopy.onclick = () =>
-    copyToClipboard(embedBox.value, embedCopy, "✅ Copied!");
-  embedClose.onclick = () => embedDlg.close();
+  embedCopy?.addEventListener("click", () =>
+    copyToClipboard(embedBox.value, embedCopy, "✅ Copied!"));
+  embedClose?.addEventListener("click", () => embedDlg.close());
 
   /* === Helper fns === */
   const makeIframe = () =>
