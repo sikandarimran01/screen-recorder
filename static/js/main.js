@@ -50,11 +50,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /* ----------  Screen‑record controls  ---------- */
   startBtn.onclick = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: true,
-      });
+  console.log("🎬 Start button clicked");  // ✅ Button click confirmed
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: true,
+    });
+
       mediaRecorder = new MediaRecorder(stream);
       chunks = [];
 
