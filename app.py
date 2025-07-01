@@ -6,6 +6,9 @@ from flask import (
 from flask_mail import Mail, Message
 import datetime, os, subprocess
 
+# ── NEW: secure‑token imports ──────────────────────────
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+
 app = Flask(__name__)
 
 # ── Mail (credentials are ENV VARS on Render) ────────────
@@ -17,6 +20,13 @@ app.config.update(
     MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),
     MAIL_DEFAULT_SENDER=("GrabScreen", os.getenv("MAIL_USERNAME")),
 )
+
+# ── NEW: Secret key for signed links ────────────────────
+#      ⚠️  Set `SECRET_KEY` in your Render dashboard.
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
+serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
+TOKEN_EXPIRY_SECONDS = 15 * 60  # 15 minutes
+
 mail = Mail(app)
 
 # ── Paths & FFmpeg settings ──────────────────────────────
@@ -95,6 +105,30 @@ def recordings(fname):
 @app.route("/download/<fname>")
 def download(fname):
     return send_from_directory(RECDIR, fname, as_attachment=True)
+
+# ---------- NEW: Generate a secure (15‑min) link ---------
+@app.route("/link/secure/<fname>")
+def generate_secure_link(fname):
+    fpath = os.path.join(RECDIR, fname)
+    if not os.path.exists(fpath):
+        return jsonify({"status": "fail", "error": "file not found"}), 404
+
+    token = serializer.dumps(fname)
+    # request.url_root already ends with '/'
+    url = request.url_root.rstrip("/") + "/secure/" + token
+    return jsonify({"status": "ok", "url": url})
+
+# ---------- NEW: Serve file via secure token -------------
+@app.route("/secure/<token>")
+def secure_download(token):
+    try:
+        fname = serializer.loads(token, max_age=TOKEN_EXPIRY_SECONDS)
+    except SignatureExpired:
+        return "⏳ Sorry, this link has expired.", 410
+    except BadSignature:
+        return "❌ Invalid link.", 400
+
+    return send_from_directory(RECDIR, fname)
 
 # ---------- Share link via e‑mail ------------------------
 @app.route("/send_email", methods=["POST"])
