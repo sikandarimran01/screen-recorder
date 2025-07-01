@@ -2,8 +2,9 @@
 const $ = sel => document.querySelector(sel);
 
 /* =============   Elements   ================ */
-const copySecure     = $('#copySecure');
-const copyPublic     = $('#copyPublic');
+// Share‑related buttons (advanced panel)
+const copySecure     = $('#copySecure');   // 🔒 15‑min link
+const copyPublic     = $('#copyPublic');   // 🌐 permanent link
 const disablePublic  = $('#disablePublic');
 
 const startBtn    = $('#startBtn');
@@ -12,9 +13,8 @@ const statusMsg   = $('#statusMsg');
 const preview     = $('#preview');
 
 const shareWrap   = $('#shareWrap');
-const copyLinkBtn = $('#copyLink');
+const copyLinkBtn = $('#copyLink');        // original full link (no expiry)
 const shareEmail  = $('#shareEmail');
-const secureLinkBtn = $('#secureLink');
 
 const openClip    = $('#openClip');
 const clipPanel   = $('#clipPanel');
@@ -91,33 +91,44 @@ stopBtn.onclick = () => {
   }
 };
 
-/* ----------  Share: copy full link  ---------- */
+/* ----------  Share: raw download link  ---------- */
 copyLinkBtn.onclick = () => {
   if (!fileName) return alert("⚠ No file to share yet.");
   copyToClipboard(fullUrl(fileName), copyLinkBtn);
 };
 
-/* ----------  Secure Share Link (15 min)  ---------- */
-secureLinkBtn.onclick = async () => {
-  if (!fileName) return alert("⚠ No recording available.");
-
-  secureLinkBtn.disabled = true;
-  secureLinkBtn.textContent = "⏳ Generating…";
-
-  try {
-    const res = await fetch(`/link/secure/${fileName}`).then(r => r.json());
-    if (res.status === "ok") {
-      copyToClipboard(res.url, secureLinkBtn, "✅ Secure link copied!");
-    } else {
-      alert("❌ Failed: " + res.error);
-    }
-  } catch (e) {
-    alert("❌ Network error");
-  } finally {
-    secureLinkBtn.textContent = "🔒 Copy Secure Link";
-    secureLinkBtn.disabled = false;
+/* ----------  🔒 Secure Link (15‑min)  ---------- */
+copySecure && (copySecure.onclick = async () => {
+  if (!fileName) return alert("⚠ No file to share yet.");
+  const res = await fetch(`/link/secure/${fileName}`).then(r => r.json());
+  if (res.status === "ok") {
+    copyToClipboard(res.url, copySecure, "✅ Secure link copied (15 min)");
+  } else {
+    alert("❌ " + res.error);
   }
-};
+});
+
+/* ----------  🌐 Public Link (permanent) ---------- */
+copyPublic && (copyPublic.onclick = async () => {
+  if (!fileName) return alert("⚠ No file to share yet.");
+  const res = await fetch(`/link/public/${fileName}`).then(r => r.json());
+  if (res.status === "ok") {
+    copyToClipboard(res.url, copyPublic, "✅ Public link copied");
+  } else {
+    alert("❌ " + res.error);
+  }
+});
+
+/* ----------  ❌ Disable Public Link  ---------- */
+disablePublic && (disablePublic.onclick = async () => {
+  if (!fileName) return alert("⚠ No public link to disable.");
+  const res = await fetch(`/link/public/${fileName}`, { method: "DELETE" }).then(r => r.json());
+  if (res.status === "ok") {
+    alert("✅ Public link disabled.");
+  } else {
+    alert("❌ " + res.error);
+  }
+});
 
 /* ----------  Email modal  ---------- */
 shareEmail.onclick = () => {
@@ -215,11 +226,4 @@ embedClose.onclick = () => embedDlg.close();
 function makeIframe() {
   return `<iframe width="${embedWidth.value}" height="${embedHeight.value}" src="${fullUrl(fileName)}" frameborder="0" allowfullscreen></iframe>`;
 }
-function copyToClipboard(text, btn, ok = "✅ Copied!") {
-  navigator.clipboard.writeText(text).then(() => {
-    const prev = btn.textContent;
-    btn.textContent = ok;
-    btn.disabled = true;
-    setTimeout(() => { btn.textContent = prev; btn.disabled = false; }, 2000);
-  });
-}
+function copyToClipboard(text, btn
