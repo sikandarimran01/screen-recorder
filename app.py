@@ -1,190 +1,253 @@
-from flask import (
-    Flask, render_template, request, jsonify,
-    send_from_directory
-)
-from flask_mail import Mail, Message
-import datetime, os, subprocess, json, random, string
-from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+/* ───────────────────────────────────────────────
+   static/js/main.js   (replace the whole file)
+   ─────────────────────────────────────────────── */
+document.addEventListener("DOMContentLoaded", () => {
+  /* ===  Quick DOM helper  === */
+  const $ = (sel) => document.querySelector(sel);
 
-app = Flask(__name__)
+  /* ===  Grab elements  === */
+  const copySecure     = $("#copySecure");  // 🔒 15‑min link
+  const copyPublic     = $("#copyPublic");  // 🌐 permanent link
+  const disablePublic  = $("#disablePublic");
 
-# ── Mail config (set via ENV in Render) ─────────────────
-app.config.update(
-    MAIL_SERVER="smtp.gmail.com",
-    MAIL_PORT=587,
-    MAIL_USE_TLS=True,
-    MAIL_USERNAME=os.getenv("MAIL_USERNAME"),
-    MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),
-    MAIL_DEFAULT_SENDER=("GrabScreen", os.getenv("MAIL_USERNAME")),
-)
+  const startBtn  = $("#startBtn");
+  const stopBtn   = $("#stopBtn");
+  const statusMsg = $("#statusMsg");
+  const preview   = $("#preview");
 
-# ── Security settings ───────────────────────────────────
-app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
-serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
-TOKEN_EXPIRY_SECONDS = 15 * 60  # 15 minutes
+  const shareWrap = $("#shareWrap");
+  const copyLinkBtn = $("#copyLink");
 
-mail = Mail(app)
+  const shareEmail = $("#shareEmail");
+  const emailDlg   = $("#emailModal");
+  const emailInput = $("#emailTo");
+  const emailSend  = $("#emailSend");
+  const emailClose = $("#emailClose");
+  const emailStatus = $("#emailStatus");
 
-# ── Storage paths ───────────────────────────────────────
-EXT     = "webm"
-FFMPEG  = "ffmpeg"
-RECDIR  = "/mnt/recordings"
-os.makedirs(RECDIR, exist_ok=True)
+  const openClip  = $("#openClip");
+  const clipPanel = $("#clipPanel");
+  const clipGo    = $("#clipGo");
+  const clipCancel = $("#clipCancel");
 
-# ── Persistent public link storage ──────────────────────
-LINKS_FILE = "public_links.json"
-if os.path.exists(LINKS_FILE):
-    with open(LINKS_FILE, "r") as f:
-        public_links = json.load(f)
-else:
-    public_links = {}
+  const openEmbed  = $("#openEmbed");
+  const embedDlg   = $("#embedModal");
+  const embedWidth = $("#embedWidth");
+  const embedHeight = $("#embedHeight");
+  const embedBox   = $("#embedCode");
+  const embedCopy  = $("#embedCopy");
+  const embedClose = $("#embedClose");
 
-def save_links():
-    with open(LINKS_FILE, "w") as f:
-        json.dump(public_links, f)
+  /* ===  Helpers  === */
+  const isLocal  = ["localhost", "127.0.0.1"].includes(location.hostname);
+  const REC_BASE = isLocal ? "/static/recordings/" : "/recordings/";
+  const fullUrl  = (fname) => `${location.origin}${REC_BASE}${fname}`;
 
-# ─────────────────────────────────────────────────────────
-# Routes
-# ─────────────────────────────────────────────────────────
+  let mediaRecorder;          // MediaRecorder instance
+  let chunks = [];            // recorded Blob chunks
+  let fileName = "";          // set after upload
 
-@app.route("/")
-def index():
-    return render_template("index.html", year=datetime.datetime.now().year)
+  /* ==========  Screen‑record controls  ========== */
+  startBtn.onclick = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
+      });
+      mediaRecorder = new MediaRecorder(stream);
+      chunks = [];
 
-@app.route("/upload", methods=["POST"])
-def upload():
-    video_file = request.files.get("video")
-    if not video_file:
-        return jsonify({"status": "fail", "error": "No file"}), 400
+      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
 
-    fname = datetime.datetime.now().strftime("recording_%Y%m%d_%H%M%S.webm")
-    save_path = os.path.join(RECDIR, fname)
+      mediaRecorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: "video/webm" });
+        const fd = new FormData();
+        fd.append("video", blob, "recording.webm");
 
-    try:
-        video_file.save(save_path)
-    except Exception as e:
-        return jsonify({"status": "fail", "error": str(e)}), 500
+        statusMsg.textContent = "⏫ Uploading…";
+        const res = await fetch("/upload", { method: "POST", body: fd }).then((r) => r.json());
 
-    return jsonify({"status": "ok", "filename": fname, "url": f"/recordings/{fname}"})
+        if (res.status === "ok") {
+          fileName = res.filename;
+          const url = fullUrl(fileName);
 
+          preview.src = url;
+          preview.classList.remove("hidden");
+          shareWrap.classList.remove("hidden");
+          statusMsg.innerHTML = `✅ Saved <a href="${url}" download>Download</a>`;
+        } else {
+          alert("❌ Upload failed");
+        }
+        startBtn.disabled = false;
+      };
 
-@app.route("/clip/<orig>", methods=["POST"])
-def clip(orig):
-    data = request.get_json()
-    start = float(data["start"])
-    end = float(data["end"])
+      mediaRecorder.start();
+      statusMsg.textContent = "🎬 Recording…";
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+    } catch (err) {
+      console.error(err);
+      alert("Screen‑capture permission denied.");
+    }
+  };
 
-    if start >= end:
-        return jsonify({"status": "fail", "error": "start >= end"}), 400
+  stopBtn.onclick = () => {
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+      mediaRecorder.stop();
+      stopBtn.disabled = true;
+    }
+  };
 
-    in_path = os.path.join(RECDIR, orig)
-    if not os.path.exists(in_path):
-        return jsonify({"status": "fail", "error": "file not found"}), 404
+  /* ==========  Share buttons  ========== */
 
-    clip_name = datetime.datetime.now().strftime("clip_%Y%m%d_%H%M%S.webm")
-    out_path = os.path.join(RECDIR, clip_name)
-    duration = end - start
+  // Raw download link
+  copyLinkBtn.onclick = () => {
+    if (!fileName) return alert("⚠ No file to share yet.");
+    copyToClipboard(fullUrl(fileName), copyLinkBtn);
+  };
 
-    cmd = [FFMPEG, "-hide_banner", "-loglevel", "error",
-           "-ss", str(start), "-t", str(duration), "-i", in_path,
-           "-c:v", "libvpx-vp9", "-b:v", "1M",
-           "-c:a", "libopus", "-b:a", "128k", "-y", out_path]
+  // 🔒 Secure link (15 min)
+  copySecure &&
+    (copySecure.onclick = async () => {
+      if (!fileName) return alert("⚠ No file to share yet.");
+      const res = await fetch(`/link/secure/${fileName}`).then((r) => r.json());
+      if (res.status === "ok") {
+        copyToClipboard(res.url, copySecure, "✅ Secure link copied (15 min)");
+      } else {
+        alert("❌ " + res.error);
+      }
+    });
 
-    try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
-        return jsonify({"status": "ok", "clip": clip_name})
-    except subprocess.CalledProcessError as e:
-        return jsonify({"status": "fail", "error": e.stderr.strip()}), 500
+  // 🌐 Public link (permanent)
+  copyPublic &&
+    (copyPublic.onclick = async () => {
+      if (!fileName) return alert("⚠ No file to share yet.");
+      const res = await fetch(`/link/public/${fileName}`).then((r) => r.json());
+      if (res.status === "ok") {
+        copyToClipboard(res.url, copyPublic, "✅ Public link copied");
+      } else {
+        alert("❌ " + res.error);
+      }
+    });
 
-@app.route("/recordings/<fname>")
-def recordings(fname):
-    return send_from_directory(RECDIR, fname)
+  // ❌ Disable public link
+  disablePublic &&
+    (disablePublic.onclick = async () => {
+      if (!fileName) return alert("⚠ No public link to disable.");
+      const res = await fetch(`/link/public/${fileName}`, { method: "DELETE" }).then((r) => r.json());
+      if (res.status === "ok") {
+        alert("✅ Public link disabled.");
+      } else {
+        alert("❌ " + res.error);
+      }
+    });
 
-@app.route("/download/<fname>")
-def download(fname):
-    return send_from_directory(RECDIR, fname, as_attachment=True)
+  /* ==========  Email modal  ========== */
+  shareEmail.onclick = () => {
+    if (!fileName) return alert("⚠ No recording available.");
+    emailInput.value = "";
+    emailStatus.textContent = "";
+    emailDlg.showModal();
+  };
+  emailClose.onclick = () => emailDlg.close();
 
-@app.route("/link/secure/<fname>")
-def generate_secure_link(fname):
-    if not os.path.exists(os.path.join(RECDIR, fname)):
-        return jsonify({"status": "fail", "error": "file not found"}), 404
+  emailSend.onclick = async () => {
+    const to = emailInput.value.trim();
+    if (!to) {
+      emailStatus.textContent = "❌ Please enter a valid e‑mail.";
+      emailStatus.style.color = "var(--danger)";
+      return;
+    }
+    emailSend.disabled = true;
+    emailSend.textContent = "⏳ Sending…";
 
-    token = serializer.dumps(fname)
-    url = request.url_root.rstrip("/") + "/secure/" + token
-    return jsonify({"status": "ok", "url": url})
+    try {
+      const res = await fetch("/send_email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to, url: fullUrl(fileName) }),
+      }).then((r) => r.json());
 
-@app.route("/secure/<token>")
-def secure_download(token):
-    try:
-        fname = serializer.loads(token, max_age=TOKEN_EXPIRY_SECONDS)
-    except SignatureExpired:
-        return "⏳ Link expired.", 410
-    except BadSignature:
-        return "❌ Invalid link.", 400
-    return send_from_directory(RECDIR, fname)
+      if (res.status === "ok") {
+        emailStatus.textContent = "✅ Email sent!";
+        emailStatus.style.color = "var(--success)";
+      } else {
+        emailStatus.textContent = "❌ Failed: " + res.error;
+        emailStatus.style.color = "var(--danger)";
+      }
+    } catch {
+      emailStatus.textContent = "❌ Network error.";
+      emailStatus.style.color = "var(--danger)";
+    } finally {
+      emailSend.disabled = false;
+      emailSend.textContent = "📤 Send";
+    }
+  };
 
-@app.route("/link/public/<fname>", methods=["GET"])
-def get_or_create_public_link(fname):
-    if not os.path.exists(os.path.join(RECDIR, fname)):
-        return jsonify({"status": "fail", "error": "File not found"}), 404
+  /* ==========  Clip panel  ========== */
+  openClip.onclick = () => {
+    const hidden = clipPanel.classList.toggle("hidden");
+    clipPanel.classList.toggle("fade-in", !hidden);
+  };
+  clipCancel.onclick = () => {
+    clipPanel.classList.add("hidden");
+    clipPanel.classList.remove("fade-in");
+  };
 
-    for token, f in public_links.items():
-        if f == fname:
-            url = request.url_root.rstrip("/") + "/public/" + token
-            return jsonify({"status": "ok", "url": url})
+  clipGo.onclick = async () => {
+    const start = +$("#clipStart").value;
+    const end = +$("#clipEnd").value;
+    if (!fileName) return alert("⚠ No recording to clip.");
+    if (start >= end) return alert("⚠ Invalid range.");
 
-    token = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
-    public_links[token] = fname
-    save_links()
-    return jsonify({"status": "ok", "url": request.url_root.rstrip("/") + "/public/" + token})
+    clipGo.disabled = true;
+    clipGo.textContent = "⏳ Cutting…";
 
-@app.route("/link/public/<fname>", methods=["DELETE"])
-def delete_public_link(fname):
-    removed = False
-    for token, f in list(public_links.items()):
-        if f == fname:
-            del public_links[token]
-            removed = True
-    if removed:
-        save_links()
-        return jsonify({"status": "ok", "message": "Link removed"})
-    return jsonify({"status": "fail", "error": "No public link found"}), 404
+    const res = await fetch(`/clip/${fileName}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ start, end }),
+    }).then((r) => r.json());
 
-@app.route("/public/<token>")
-def serve_public_file(token):
-    fname = public_links.get(token)
-    if not fname:
-        return "❌ Invalid or expired link.", 404
-    return send_from_directory(RECDIR, fname)
+    if (res.status === "ok") {
+      const url = `${location.origin}/recordings/${fileName}`;
+      copyToClipboard(url, clipGo, "✅ Clip link copied!");
+    } else {
+      alert("❌ Clip failed: " + res.error);
+    }
+    clipGo.disabled = false;
+    clipGo.textContent = "📤 Share Clip";
+  };
 
-@app.route("/send_email", methods=["POST"])
-def send_email():
-    data = request.get_json()
-    try:
-        mail.send(Message(
-            "GrabScreen recording",
-            recipients=[data["to"]],
-            body=f"Hi,\n\nHere is your recording:\n{data['url']}\n\nEnjoy!"
-        ))
-        return jsonify({"status": "ok"})
-    except Exception as e:
-        return jsonify({"status": "fail", "error": str(e)}), 500
+  /* ==========  Embed modal  ========== */
+  openEmbed.onclick = () => {
+    if (!fileName) return alert("⚠ No recording to embed.");
+    embedBox.value = makeIframe();
+    embedDlg.showModal();
+  };
+  embedWidth.oninput = embedHeight.oninput = () => (embedBox.value = makeIframe());
+  embedCopy.onclick = () => copyToClipboard(embedBox.value, embedCopy, "✅ Copied!");
+  embedClose.onclick = () => embedDlg.close();
 
-@app.route("/debug/files")
-def list_files():
-    return "<br>".join(sorted(os.listdir(RECDIR)))
+  /* ==========  Helper functions  ========== */
+  function makeIframe() {
+    return `<iframe width="${embedWidth.value}" height="${embedHeight.value}" src="${fullUrl(
+      fileName
+    )}" frameborder="0" allowfullscreen></iframe>`;
+  }
 
-@app.route("/delete/<filename>", methods=["POST"])
-def delete_file(filename):
-    file_path = os.path.join(RECDIR, filename)
-    if not os.path.exists(file_path):
-        return jsonify({"status": "fail", "error": "File not found"}), 404
-    try:
-        os.remove(file_path)
-        return jsonify({"status": "ok", "message": f"{filename} deleted"})
-    except Exception as e:
-        return jsonify({"status": "fail", "error": str(e)}), 500
-
-# ── Local testing ────────────────────────────────────────
-if __name__ == "__main__":
-    app.run(debug=True)
+  function copyToClipboard(text, btn, msg = "✅ Copied!") {
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        const prev = btn.textContent;
+        btn.textContent = msg;
+        btn.disabled = true;
+        setTimeout(() => {
+          btn.textContent = prev;
+          btn.disabled = false;
+        }, 2000);
+      })
+      .catch(() => alert("❌ Copy failed"));
+  }
+});
