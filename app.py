@@ -1,196 +1,190 @@
+"""
+GrabScreen – backend with “Magic‑Link Session” support
+-----------------------------------------------------
+Every browser gets a random 32‑char session token
+  • Sent automatically (cookie  +  X‑Session header)
+  • Server stores {created, files:[…]} in sessions.json
+  • /my/files  → last recordings for that session
+  • /forget_session  → wipe the server‑side list
+"""
+
 from flask import (
-    Flask, render_template, request, jsonify,
-    send_from_directory
+    Flask, render_template, request, jsonify, send_from_directory, make_response
 )
 from flask_mail import Mail, Message
 import datetime, os, subprocess, json, random, string
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
+# ─────────────────────────── Flask setup ────────────────────────────
 app = Flask(__name__)
 
-# ── Mail config (set via ENV in Render) ─────────────────
 app.config.update(
-    MAIL_SERVER="smtp.gmail.com",
-    MAIL_PORT=587,
-    MAIL_USE_TLS=True,
+    MAIL_SERVER="smtp.gmail.com", MAIL_PORT=587, MAIL_USE_TLS=True,
     MAIL_USERNAME=os.getenv("MAIL_USERNAME"),
     MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),
     MAIL_DEFAULT_SENDER=("GrabScreen", os.getenv("MAIL_USERNAME")),
 )
-
-# ── Security settings ───────────────────────────────────
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
-serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
-TOKEN_EXPIRY_SECONDS = 15 * 60  # 15 minutes
+
+serializer          = URLSafeTimedSerializer(app.config["SECRET_KEY"])
+TOKEN_EXPIRY_SECONDS = 15 * 60             # 15‑min secure links
+SESSION_MAX_AGE      = 90 * 24 * 3600      # Cookie lifetime (90 days)
 
 mail = Mail(app)
 
-# ── Storage paths ───────────────────────────────────────
-EXT     = "webm"
-FFMPEG  = "ffmpeg"
-RECDIR  = "/mnt/recordings"
+# ─────────────────────────── Paths / files ──────────────────────────
+RECDIR = "/mnt/recordings"
 os.makedirs(RECDIR, exist_ok=True)
 
-# ── Persistent public link storage ──────────────────────
-LINKS_FILE = "public_links.json"
-if os.path.exists(LINKS_FILE):
-    with open(LINKS_FILE, "r") as f:
-        public_links = json.load(f)
-else:
-    public_links = {}
+LINKS_FILE  = "public_links.json"
+SESS_FILE   = "sessions.json"
 
-def save_links():
-    with open(LINKS_FILE, "w") as f:
-        json.dump(public_links, f)
+def _load(path):  return json.load(open(path)) if os.path.exists(path) else {}
+def _save(path,d): open(path,"w").write(json.dumps(d,indent=2))
 
-# ─────────────────────────────────────────────────────────
-# Routes
-# ─────────────────────────────────────────────────────────
+public_links = _load(LINKS_FILE)      # public‑token  → filename
+sessions     = _load(SESS_FILE)       # session‑token → {created,files}
+
+def _new_token(n=32):
+    return ''.join(random.choices(string.ascii_letters+string.digits, k=n))
+
+# fetch existing session token or create a new one (but don’t set cookie here)
+def current_session(create_if_missing=True):
+    tok = request.headers.get("X-Session") \
+        or request.cookies.get("session")
+    if tok and tok in sessions:                       # existing
+        return tok, False
+    if create_if_missing:                             # new
+        tok = _new_token()
+        sessions[tok] = {"created": datetime.datetime.utcnow().isoformat(),
+                         "files": []}
+        _save(SESS_FILE, sessions)
+        return tok, True
+    return None, False
+
+# ───────────────────────────── Routes ───────────────────────────────
 
 @app.route("/")
 def index():
     return render_template("index.html", year=datetime.datetime.now().year)
 
+# -------- upload ----------------------------------------------------
 @app.route("/upload", methods=["POST"])
 def upload():
-    video_file = request.files.get("video")
-    if not video_file:
-        return jsonify({"status": "fail", "error": "No file"}), 400
+    tok, is_new = current_session()                   # who is uploading
+    video = request.files.get("video")
+    if not video:
+        return jsonify({"status":"fail","error":"No file"}), 400
 
     fname = datetime.datetime.now().strftime("recording_%Y%m%d_%H%M%S.webm")
-    save_path = os.path.join(RECDIR, fname)
+    video.save(os.path.join(RECDIR, fname))
 
-    try:
-        video_file.save(save_path)
-    except Exception as e:
-        return jsonify({"status": "fail", "error": str(e)}), 500
+    sessions[tok]["files"].append(fname);  _save(SESS_FILE, sessions)
 
-    return jsonify({"status": "ok", "filename": fname, "url": f"/recordings/{fname}"})
+    secure_url = request.url_root.rstrip("/") + "/secure/" + serializer.dumps(fname)
+    resp = make_response(jsonify({"status":"ok","filename":fname,"url":secure_url}))
+    if is_new:                                         # set cookie once
+        resp.set_cookie("session", tok, max_age=SESSION_MAX_AGE, samesite="Lax")
+    return resp
 
-
+# -------- clip ------------------------------------------------------
 @app.route("/clip/<orig>", methods=["POST"])
 def clip(orig):
-    try:
-        data = request.get_json(force=True)
-        start = float(data["start"])
-        end = float(data["end"])
-    except Exception as e:
-        return jsonify({"status": "fail", "error": f"Invalid JSON: {str(e)}"}), 400
+    data   = request.get_json(force=True)
+    start  = float(data["start"]);  end = float(data["end"])
+    if start >= end: return jsonify({"status":"fail","error":"start>=end"}),400
+    src = os.path.join(RECDIR, orig)
+    if not os.path.exists(src): return jsonify({"status":"fail","error":"not found"}),404
 
-    if start >= end:
-        return jsonify({"status": "fail", "error": "Start time must be less than end time"}), 400
+    out  = datetime.datetime.now().strftime("clip_%Y%m%d_%H%M%S.webm")
+    dst  = os.path.join(RECDIR, out)
+    cmd  = ["ffmpeg","-hide_banner","-loglevel","error","-ss",str(start),
+            "-t",str(end-start),"-i",src,"-c:v","libvpx-vp9","-b:v","1M",
+            "-c:a","libopus","-b:a","128k","-y",dst]
+    subprocess.run(cmd, check=True)
 
-    in_path = os.path.join(RECDIR, orig)
-    if not os.path.exists(in_path):
-        return jsonify({"status": "fail", "error": "Original file not found"}), 404
+    tok,_ = current_session()
+    sessions[tok]["files"].append(out); _save(SESS_FILE, sessions)
+    return jsonify({"status":"ok","clip":out})
 
-    clip_name = datetime.datetime.now().strftime("clip_%Y%m%d_%H%M%S.webm")
-    out_path = os.path.join(RECDIR, clip_name)
-    duration = end - start
-
-    cmd = [
-        FFMPEG, "-hide_banner", "-loglevel", "error",
-        "-ss", str(start), "-t", str(duration), "-i", in_path,
-        "-c:v", "libvpx-vp9", "-b:v", "1M",
-        "-c:a", "libopus", "-b:a", "128k",
-        "-y", out_path
-    ]
-
-    try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
-        return jsonify({"status": "ok", "clip": clip_name})
-    except subprocess.CalledProcessError as e:
-        return jsonify({"status": "fail", "error": e.stderr}), 500
-
+# -------- serve recordings & downloads ------------------------------
 @app.route("/recordings/<fname>")
-def recordings(fname):
-    return send_from_directory(RECDIR, fname)
+def recordings(fname):  return send_from_directory(RECDIR, fname)
 
 @app.route("/download/<fname>")
-def download(fname):
-    return send_from_directory(RECDIR, fname, as_attachment=True)
+def download(fname):     return send_from_directory(RECDIR, fname, as_attachment=True)
 
+# -------- 15‑minute secure link -------------------------------------
 @app.route("/link/secure/<fname>")
-def generate_secure_link(fname):
-    if not os.path.exists(os.path.join(RECDIR, fname)):
-        return jsonify({"status": "fail", "error": "file not found"}), 404
-
+def link_secure(fname):
+    if not os.path.exists(os.path.join(RECDIR,fname)):
+        return jsonify({"status":"fail","error":"file not found"}),404
     token = serializer.dumps(fname)
-    url = request.url_root.rstrip("/") + "/secure/" + token
-    return jsonify({"status": "ok", "url": url})
+    url   = request.url_root.rstrip("/") + "/secure/" + token
+    return jsonify({"status":"ok","url":url})
 
 @app.route("/secure/<token>")
 def secure_download(token):
-    try:
-        fname = serializer.loads(token, max_age=TOKEN_EXPIRY_SECONDS)
-    except SignatureExpired:
-        return "⏳ Link expired.", 410
-    except BadSignature:
-        return "❌ Invalid link.", 400
+    try:      fname = serializer.loads(token, max_age=TOKEN_EXPIRY_SECONDS)
+    except SignatureExpired: return "⏳ Link expired.",410
+    except BadSignature:     return "❌ Invalid link.",400
     return send_from_directory(RECDIR, fname)
 
-@app.route("/link/public/<fname>", methods=["GET"])
-def get_or_create_public_link(fname):
-    if not os.path.exists(os.path.join(RECDIR, fname)):
-        return jsonify({"status": "fail", "error": "File not found"}), 404
+# -------- public link -----------------------------------------------
+@app.route("/link/public/<fname>", methods=["GET","DELETE"])
+def link_public(fname):
+    if not os.path.exists(os.path.join(RECDIR,fname)):
+        return jsonify({"status":"fail","error":"file not found"}),404
 
-    for token, f in public_links.items():
-        if f == fname:
-            url = request.url_root.rstrip("/") + "/public/" + token
-            return jsonify({"status": "ok", "url": url})
+    if request.method=="GET":
+        for t,f in public_links.items():
+            if f==fname:
+                return jsonify({"status":"ok","url":request.url_root.rstrip('/')+'/public/'+t})
+        t=_new_token(12); public_links[t]=fname; _save(LINKS_FILE, public_links)
+        return jsonify({"status":"ok","url":request.url_root.rstrip('/')+'/public/'+t})
 
-    token = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
-    public_links[token] = fname
-    save_links()
-    return jsonify({"status": "ok", "url": request.url_root.rstrip("/") + "/public/" + token})
-
-@app.route("/link/public/<fname>", methods=["DELETE"])
-def delete_public_link(fname):
-    removed = False
-    for token, f in list(public_links.items()):
-        if f == fname:
-            del public_links[token]
-            removed = True
-    if removed:
-        save_links()
-        return jsonify({"status": "ok", "message": "Link removed"})
-    return jsonify({"status": "fail", "error": "No public link found"}), 404
+    # DELETE
+    for t,f in list(public_links.items()):
+        if f==fname: del public_links[t]; _save(LINKS_FILE,public_links); return jsonify({"status":"ok"})
+    return jsonify({"status":"fail","error":"No public link"}),404
 
 @app.route("/public/<token>")
-def serve_public_file(token):
-    fname = public_links.get(token)
-    if not fname:
-        return "❌ Invalid or expired link.", 404
-    return send_from_directory(RECDIR, fname)
+def serve_public(token):
+    f = public_links.get(token)
+    if not f: return "❌ Invalid or expired link.",404
+    return send_from_directory(RECDIR, f)
 
+# -------- e‑mail ----------------------------------------------------
 @app.route("/send_email", methods=["POST"])
 def send_email():
-    data = request.get_json()
+    d = request.get_json(force=True)
     try:
-        mail.send(Message(
-            "GrabScreen recording",
-            recipients=[data["to"]],
-            body=f"Hi,\n\nHere is your recording:\n{data['url']}\n\nEnjoy!"
-        ))
-        return jsonify({"status": "ok"})
+        mail.send(Message("GrabScreen recording",recipients=[d["to"]],
+                          body=f"Hi,\n\nHere is your recording:\n{d['url']}\n"))
+        return jsonify({"status":"ok"})
     except Exception as e:
-        return jsonify({"status": "fail", "error": str(e)}), 500
+        return jsonify({"status":"fail","error":str(e)}),500
 
+# -------- session history & forget ----------------------------------
+@app.route("/my/files")
+def my_files():
+    tok,_ = current_session(False)
+    if not tok: return jsonify({"status":"ok","files":[]})
+    return jsonify({"status":"ok","files":sessions.get(tok,{}).get("files",[]) })
+
+@app.route("/forget_session", methods=["POST"])
+def forget_session():
+    tok,_ = current_session(False)
+    if tok and tok in sessions:
+        del sessions[tok]; _save(SESS_FILE, sessions)
+    resp = jsonify({"status":"ok"})
+    resp.set_cookie("session", "", expires=0)
+    return resp
+
+# -------- debug -----------------------------------------------------
 @app.route("/debug/files")
-def list_files():
-    return "<br>".join(sorted(os.listdir(RECDIR)))
+def list_all(): return "<br>".join(sorted(os.listdir(RECDIR)))
 
-@app.route("/delete/<filename>", methods=["POST"])
-def delete_file(filename):
-    file_path = os.path.join(RECDIR, filename)
-    if not os.path.exists(file_path):
-        return jsonify({"status": "fail", "error": "File not found"}), 404
-    try:
-        os.remove(file_path)
-        return jsonify({"status": "ok", "message": f"{filename} deleted"})
-    except Exception as e:
-        return jsonify({"status": "fail", "error": str(e)}), 500
-
-# ── Local testing ────────────────────────────────────────
+# --------------------------------------------------------------------
 if __name__ == "__main__":
     app.run(debug=True)
