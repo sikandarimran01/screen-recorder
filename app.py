@@ -42,31 +42,31 @@ def clip(orig):
     data = request.get_json()
     start, end = float(data["start"]), float(data["end"])
     if start >= end:
-        return jsonify({"status": "fail", "error": "start>=end"}), 400
+        return jsonify({"status": "fail", "error": "start >= end"}), 400
+
     in_path = os.path.join(RECDIR, orig)
     if not os.path.exists(in_path):
         return jsonify({"status": "fail", "error": "file not found"}), 404
+
     clip_name = datetime.datetime.now().strftime("clip_%Y%m%d_%H%M%S.") + EXT
     out_path  = os.path.join(RECDIR, clip_name)
-    cmd = [FFMPEG, "-hide_banner", "-loglevel", "error",
-           "-ss", str(start), "-t", str(end), "-i", in_path,
-           "-c", "copy", "-y", out_path]
-    subprocess.run(cmd, check=True)
-    return jsonify({"status": "ok", "clip": clip_name})
 
-# Send email with share link
-@app.route("/send_email", methods=["POST"])
-def send_email():
-    data = request.get_json()
-    to  = data["to"]
-    url = data["url"]
+    duration  = end - start           # ✅ use duration, not absolute end‑time
+    cmd = [
+        FFMPEG, "-hide_banner", "-loglevel", "error",
+        "-ss", str(start),
+        "-t",  str(duration),          # << duration in seconds
+        "-i", in_path,
+        "-c", "copy",
+        "-y", out_path
+    ]
+
     try:
-        mail.send(Message("GrabScreen recording",
-                          recipients=[to],
-                          body=f"Hi,\n\nHere is the recording link:\n{url}\n\nEnjoy!"))
-        return jsonify({"status": "ok"})
-    except Exception as e:
-        return jsonify({"status": "fail", "error": str(e)}), 500
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        return jsonify({"status": "ok", "clip": clip_name})
+    except subprocess.CalledProcessError as e:
+        # send ffmpeg stderr back for easier debugging
+        return jsonify({"status": "fail", "error": e.stderr.strip()}), 500
 
 # Direct download
 @app.route("/download/<fname>")
