@@ -5,7 +5,7 @@
   <title>GrabScreen – Free Online Screen Recorder | Record, Trim, Share | No Login & Signup</title>
 
   <!-- SEO Meta Tags -->
-  <meta name="description" content="GrabScreen is a free, fast, and private online screen recorder. Record your screen instantly without installing anything. Save, trim, or share videos in one click." />
+  <meta name="description" content="GrabScreen is a free, fast, and private online screen recorder. Record your screen instantly without installing anything. Save, trim, share, or embed videos in one click." />
   <meta name="keywords" content="grab screen, online screen recorder, free screen capture, desktop recording, screen video, screen recorder online, no install screen recorder" />
   <meta name="robots" content="index, follow" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -21,7 +21,7 @@
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="GrabScreen – Free Online Screen Recorder" />
-  <meta name="twitter:description" content="Fast, free online screen recording. No downloads. Share your videos easily." />
+  <meta name="twitter:description" content="Fast, free online screen recording. No downloads. Share & embed your videos easily." />
   <meta name="twitter:image" content="{{ url_for('static', filename='images/preview.jpg') }}" />
 
   <!-- App Icons -->
@@ -29,7 +29,7 @@
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}" sizes="192x192" />
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon.png') }}" />
 
-  <!-- Font Awesome -->
+  <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" />
 
   <!-- Custom Styles -->
@@ -53,7 +53,6 @@
   <p id="statusMsg"></p>
   <video id="preview" controls class="hidden"></video>
 
-  <!-- Share Menu -->
   <div id="shareWrap" class="hidden">
     <button id="shareBtn" class="btn share">📤 Share ▼</button>
     <ul id="shareMenu" class="dropdown">
@@ -61,53 +60,55 @@
       <li><button id="copyLink">🔗 Copy Link</button></li>
       <li><button id="shareEmail">📧 Email</button></li>
       <li><button id="openClip">✂️ Share Clip</button></li>
-     
+      <li><button id="openEmbed">💻 Embed Code</button></li>
     </ul>
   </div>
 
-  <!-- Clip Panel -->
   <section id="clipPanel" class="panel hidden">
     <h2>✂ Trim Clip</h2>
     <label>Start (s): <input id="clipStart" type="number" min="0" value="0" /></label>
     <label>End (s): <input id="clipEnd" type="number" min="1" value="5" /></label>
     <button id="clipGo" class="btn share">📤 Share Clip</button>
-    <button id="clipCancel" class="btn cancel" type="button">Cancel</button>
+    <button id="clipCancel" class="btn cancel">Cancel</button>
   </section>
 
-  <!-- Email Modal -->
+  <dialog id="embedModal">
+    <h2>📎 Embed Video</h2>
+    <label>Width: <input id="embedWidth" type="text" value="100%" /></label>
+    <label>Height: <input id="embedHeight" type="text" value="960" /></label>
+    <textarea id="embedCode" readonly></textarea>
+    <button id="embedCopy" class="btn share">📋 Copy</button>
+    <button id="embedClose" class="btn cancel">Cancel</button>
+  </dialog>
+
   <dialog id="emailModal">
-    <h2>📧 Send Recording</h2>
+    <h2>📧 Send Recording</h2>
     <label>
-      To (email): <input id="emailTo" type="email" placeholder="example@domain.com" required class="input-control" />
+      To (email): <input id="emailTo" type="email" placeholder="example@domain.com" required />
     </label>
-    <div style="margin-top:1rem; display:flex; gap:1rem;">
-      <button id="emailSend" class="btn share" style="flex:1;" type="button">📤 Send</button>
-      <button id="emailClose" class="btn cancel" style="flex:1;" type="button">❌ Cancel</button>
-    </div>
+    <button id="emailSend" class="btn share">📤 Send</button>
+    <button id="emailClose" class="btn cancel">Cancel</button>
     <div id="emailStatus" style="margin-top:.75rem;font-size:.9rem;"></div>
   </dialog>
 
-  <!-- Session Controls -->
   <div class="session-controls">
     <button id="resumeBtn" class="btn hidden">🔄 Resume My Recordings</button>
     <button id="forgetSession" class="btn cancel hidden">🗑️ Forget My Session</button>
   </div>
 
-  <!-- File Grid -->
   <section id="filesPanel" class="media-grid hidden">
     <h2>Your Recordings</h2>
     <div id="mediaGrid" class="grid-container"></div>
   </section>
 
-  <!-- Footer -->
   <footer class="site-footer">
     <p>© 2025 YourBrand. All rights reserved.</p>
     <p><a href="#">Privacy Policy</a> | <a href="#">Contact</a></p>
   </footer>
 </main>
 
-<!-- Scripts -->
 <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
+
 <script>
   const themeToggleBtn = document.getElementById('themeToggle');
   const icon = themeToggleBtn.querySelector('i');
