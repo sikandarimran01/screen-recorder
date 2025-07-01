@@ -80,7 +80,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
       mediaRecorder.onstop = async () => {
         const blob = new Blob(chunks, { type: "video/webm" });
-        const fd   = new FormData().append("video", blob, "recording.webm");
+        const fd = new FormData();
+         fd.append("video", blob, "recording.webm");
+
 
         statusMsg.textContent = "⏫ Uploading…";
         const res = await apiFetch("/upload", { method:"POST", body:fd }).then(r=>r.json());
