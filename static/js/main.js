@@ -70,46 +70,78 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /* ==========  Recording  ========== */
 startBtn.onclick = async () => {
-  console.log("✅ Start button was clicked");
-  try {
-    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-    mediaRecorder = new MediaRecorder(stream);
-    chunks = [];
+       console.log("✅ Start button was clicked"); // ADD THIS
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video:true,audio:true });
+      mediaRecorder = new MediaRecorder(stream);
+      chunks = [];
 
-    mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
 
-    mediaRecorder.onstop = async () => {
-      const blob = new Blob(chunks, { type: "video/webm" });
-      const fd = new FormData();
-      fd.append("video", blob, "recording.webm"); // ✅ FIXED
+      mediaRecorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: "video/webm" });
+        const fd   = new FormData().append("video", blob, "recording.webm");
 
-      statusMsg.textContent = "⏫ Uploading…";
-      const res = await apiFetch("/upload", { method: "POST", body: fd }).then(r => r.json());
+        statusMsg.textContent = "⏫ Uploading…";
+        const res = await apiFetch("/upload", { method:"POST", body:fd }).then(r=>r.json());
 
-      if (res.status === "ok") {
-        fileName = res.filename;
-        secureUrl = res.url;
-        preview.src = fullUrl(fileName);
-        preview.classList.remove("hidden");
-        shareWrap.classList.remove("hidden");
-        statusMsg.innerHTML = `✅ Saved – <a href="${fullUrl(fileName)}" download>Download raw</a>`;
-      } else {
-        statusMsg.textContent = "❌ Upload failed: " + res.error;
-      }
+        if (res.status === "ok") {
+          fileName  = res.filename;
+          secureUrl = res.url;
+          preview.src = fullUrl(fileName);
+          preview.classList.remove("hidden");
+          shareWrap.classList.remove("hidden");
+          statusMsg.innerHTML = ✅ Saved – <a href="${fullUrl(fileName)}" download>Download raw</a>;
+        } else {
+          statusMsg.textContent = "❌ Upload failed: " + res.error;
+        }
+        startBtn.disabled = false;
+      };
 
-      startBtn.disabled = false;
-    };
+      mediaRecorder.start();
+      statusMsg.textContent = "🎬 Recording…";
+      startBtn.disabled = true;
+      stopBtn.disabled  = false;
+    } catch (err) {
+      console.error(err);
+      alert("Screen‑capture permission denied.");
+    }
+  };
 
-    mediaRecorder.start();
-    statusMsg.textContent = "🎬 Recording…";
-    startBtn.disabled = true;
-    stopBtn.disabled = false;
-  } catch (err) {
-    console.error("❌ Screen recording error:", err);
-    alert("❌ Screen‑capture permission denied.");
-  }
-};
+  stopBtn.onclick = () => {
+    if (mediaRecorder?.state === "recording") {
+      mediaRecorder.stop();
+      stopBtn.disabled = true;
+    }
+  };
 
+  /* ==========  Share links  ========== */
+  copyLinkBtn.onclick = () => {
+    if (!fileName) return alert("⚠ No file yet.");
+    copy(fullUrl(fileName), copyLinkBtn);
+  };
+
+  copySecure?.onclick = async () => {
+    if (!fileName) return alert("⚠ No file yet.");
+    try {
+      const r = await apiFetch(/link/secure/${fileName}).then(x=>x.json());
+      if (r.status === "ok") secureUrl = r.url;
+      copy(secureUrl, copySecure, "✅ Secure link copied (15 min)");
+    } catch { alert("❌ Network error."); }
+  };
+
+  copyPublic?.onclick = async () => {
+    if (!fileName) return alert("⚠ No file yet.");
+    const r = await apiFetch(/link/public/${fileName}).then(x=>x.json());
+    if (r.status === "ok") copy(r.url, copyPublic, "✅ Public link copied");
+    else alert("❌ "+r.error);
+  };
+
+  disablePublic?.onclick = async () => {
+    if (!fileName) return alert("⚠ No file yet.");
+    const r = await apiFetch(/link/public/${fileName}, {method:"DELETE"}).then(x=>x.json());
+    alert(r.status==="ok" ? "✅ Public link disabled." : "❌ "+r.error);
+  };
 
   /* ==========  Share links  ========== */
   copyLinkBtn.onclick = () => {
