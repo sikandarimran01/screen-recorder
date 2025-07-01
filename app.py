@@ -3,12 +3,14 @@ from flask import (
     send_from_directory
 )
 from flask_mail import Mail, Message
-import datetime, os, subprocess, json, random, string
+import os, datetime, subprocess, json, random, string
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
+# ──────────────────────────────────────────────────────────
+# App & Mail setup
+# ──────────────────────────────────────────────────────────
 app = Flask(__name__)
 
-# ── Mail config (set via ENV in Render) ─────────────────
 app.config.update(
     MAIL_SERVER="smtp.gmail.com",
     MAIL_PORT=587,
@@ -16,92 +18,109 @@ app.config.update(
     MAIL_USERNAME=os.getenv("MAIL_USERNAME"),
     MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),
     MAIL_DEFAULT_SENDER=("GrabScreen", os.getenv("MAIL_USERNAME")),
+    SECRET_KEY=os.getenv("SECRET_KEY", "dev-secret")   # keep tokens safe
 )
-
-# ── Security settings ───────────────────────────────────
-app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
-serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
-TOKEN_EXPIRY_SECONDS = 15 * 60  # 15 minutes
-
 mail = Mail(app)
 
-# ── Storage paths ───────────────────────────────────────
+serializer            = URLSafeTimedSerializer(app.config["SECRET_KEY"])
+TOKEN_EXPIRY_SECONDS  = 15 * 60          # 15 min secure‑link lifetime
+
+# ──────────────────────────────────────────────────────────
+# Paths / storage
+# ──────────────────────────────────────────────────────────
 EXT     = "webm"
 FFMPEG  = "ffmpeg"
 RECDIR  = "/mnt/recordings"
 os.makedirs(RECDIR, exist_ok=True)
 
-# ── Persistent public link storage ──────────────────────
-LINKS_FILE = "public_links.json"
+# ──────────────────────────────────────────────────────────
+# Public‑link storage (JSON on disk)
+# ──────────────────────────────────────────────────────────
+LINKS_FILE  = "public_links.json"
+public_links = {}
 if os.path.exists(LINKS_FILE):
     with open(LINKS_FILE, "r") as f:
         public_links = json.load(f)
-else:
-    public_links = {}
 
-def save_links():
+def save_links() -> None:
     with open(LINKS_FILE, "w") as f:
         json.dump(public_links, f)
 
-# ─────────────────────────────────────────────────────────
-# Routes
-# ─────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────
+# Helper: build absolute HTTPS URLs
+# ──────────────────────────────────────────────────────────
+def build_url(path: str) -> str:
+    """
+    Return an absolute URL for any internal path.
+      • If BASE_URL env var is set, always use that domain
+        (good when behind Cloudflare, Render, etc.)
+      • Otherwise honour X‑Forwarded‑Proto sent by the proxy
+    """
+    base = os.getenv("BASE_URL")
+    if base:
+        return base.rstrip("/") + path
+    proto = request.headers.get("X-Forwarded-Proto", request.scheme)
+    return f"{proto}://{request.host}{path}"
 
+# ──────────────────────────────────────────────────────────
+# Routes
+# ──────────────────────────────────────────────────────────
 @app.route("/")
 def index():
     return render_template("index.html", year=datetime.datetime.now().year)
 
+# ---------- Upload -----------------------------------------------------------
 @app.route("/upload", methods=["POST"])
 def upload():
     video_file = request.files.get("video")
     if not video_file:
         return jsonify({"status": "fail", "error": "No file"}), 400
 
-    fname = datetime.datetime.now().strftime("recording_%Y%m%d_%H%M%S.webm")
+    fname     = datetime.datetime.now().strftime("recording_%Y%m%d_%H%M%S.webm")
     save_path = os.path.join(RECDIR, fname)
-
     try:
         video_file.save(save_path)
     except Exception as e:
         return jsonify({"status": "fail", "error": str(e)}), 500
 
-    return jsonify({"status": "ok", "filename": fname, "url": f"/recordings/{fname}"})
+    # Return a *secure* link immediately
+    token = serializer.dumps(fname)
+    url   = build_url(f"/secure/{token}")
 
+    return jsonify({"status": "ok", "filename": fname, "url": url})
 
+# ---------- Clip / trim ------------------------------------------------------
 @app.route("/clip/<orig>", methods=["POST"])
 def clip(orig):
     try:
-        data = request.get_json(force=True)
+        data  = request.get_json(force=True)
         start = float(data["start"])
-        end = float(data["end"])
+        end   = float(data["end"])
     except Exception as e:
-        return jsonify({"status": "fail", "error": f"Invalid JSON: {str(e)}"}), 400
-
+        return jsonify({"status": "fail", "error": f"Invalid JSON: {e}"}), 400
     if start >= end:
-        return jsonify({"status": "fail", "error": "Start time must be less than end time"}), 400
+        return jsonify({"status": "fail", "error": "Start ≥ end"}), 400
 
     in_path = os.path.join(RECDIR, orig)
     if not os.path.exists(in_path):
-        return jsonify({"status": "fail", "error": "Original file not found"}), 404
+        return jsonify({"status": "fail", "error": "Original not found"}), 404
 
     clip_name = datetime.datetime.now().strftime("clip_%Y%m%d_%H%M%S.webm")
-    out_path = os.path.join(RECDIR, clip_name)
-    duration = end - start
+    out_path  = os.path.join(RECDIR, clip_name)
+    duration  = end - start
 
-    cmd = [
-        FFMPEG, "-hide_banner", "-loglevel", "error",
-        "-ss", str(start), "-t", str(duration), "-i", in_path,
-        "-c:v", "libvpx-vp9", "-b:v", "1M",
-        "-c:a", "libopus", "-b:a", "128k",
-        "-y", out_path
-    ]
-
+    cmd = [FFMPEG, "-hide_banner", "-loglevel", "error",
+           "-ss", str(start), "-t", str(duration), "-i", in_path,
+           "-c:v", "libvpx-vp9", "-b:v", "1M",
+           "-c:a", "libopus",   "-b:a", "128k",
+           "-y", out_path]
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
         return jsonify({"status": "ok", "clip": clip_name})
     except subprocess.CalledProcessError as e:
         return jsonify({"status": "fail", "error": e.stderr}), 500
 
+# ---------- Static file serving ---------------------------------------------
 @app.route("/recordings/<fname>")
 def recordings(fname):
     return send_from_directory(RECDIR, fname)
@@ -110,39 +129,43 @@ def recordings(fname):
 def download(fname):
     return send_from_directory(RECDIR, fname, as_attachment=True)
 
+# ---------- Secure link (15 min) --------------------------------------------
 @app.route("/link/secure/<fname>")
 def generate_secure_link(fname):
     if not os.path.exists(os.path.join(RECDIR, fname)):
-        return jsonify({"status": "fail", "error": "file not found"}), 404
-
+        return jsonify({"status": "fail", "error": "File not found"}), 404
     token = serializer.dumps(fname)
-    url = request.url_root.rstrip("/") + "/secure/" + token
-    return jsonify({"status": "ok", "url": url})
+    return jsonify({"status": "ok",
+                    "url": build_url(f"/secure/{token}")})
 
 @app.route("/secure/<token>")
 def secure_download(token):
     try:
         fname = serializer.loads(token, max_age=TOKEN_EXPIRY_SECONDS)
     except SignatureExpired:
-        return "⏳ Link expired.", 410
+        return "⏳ Link expired.", 410
     except BadSignature:
-        return "❌ Invalid link.", 400
+        return "❌ Invalid link.", 400
     return send_from_directory(RECDIR, fname)
 
+# ---------- Public link (permanent) -----------------------------------------
 @app.route("/link/public/<fname>", methods=["GET"])
 def get_or_create_public_link(fname):
     if not os.path.exists(os.path.join(RECDIR, fname)):
         return jsonify({"status": "fail", "error": "File not found"}), 404
 
+    # Re‑use existing
     for token, f in public_links.items():
         if f == fname:
-            url = request.url_root.rstrip("/") + "/public/" + token
-            return jsonify({"status": "ok", "url": url})
+            return jsonify({"status": "ok",
+                            "url": build_url(f"/public/{token}")})
 
     token = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
     public_links[token] = fname
     save_links()
-    return jsonify({"status": "ok", "url": request.url_root.rstrip("/") + "/public/" + token})
+
+    return jsonify({"status": "ok",
+                    "url": build_url(f"/public/{token}")})
 
 @app.route("/link/public/<fname>", methods=["DELETE"])
 def delete_public_link(fname):
@@ -163,6 +186,7 @@ def serve_public_file(token):
         return "❌ Invalid or expired link.", 404
     return send_from_directory(RECDIR, fname)
 
+# ---------- Email share ------------------------------------------------------
 @app.route("/send_email", methods=["POST"])
 def send_email():
     data = request.get_json()
@@ -176,21 +200,22 @@ def send_email():
     except Exception as e:
         return jsonify({"status": "fail", "error": str(e)}), 500
 
+# ---------- Utils -----------------------------------------------------------
 @app.route("/debug/files")
 def list_files():
     return "<br>".join(sorted(os.listdir(RECDIR)))
 
 @app.route("/delete/<filename>", methods=["POST"])
 def delete_file(filename):
-    file_path = os.path.join(RECDIR, filename)
-    if not os.path.exists(file_path):
-        return jsonify({"status": "fail", "error": "File not found"}), 404
+    fp = os.path.join(RECDIR, filename)
+    if not os.path.exists(fp):
+        return jsonify({"status": "fail", "error": "Not found"}), 404
     try:
-        os.remove(file_path)
+        os.remove(fp)
         return jsonify({"status": "ok", "message": f"{filename} deleted"})
     except Exception as e:
         return jsonify({"status": "fail", "error": str(e)}), 500
 
-# ── Local testing ────────────────────────────────────────
+# ── Local debug run ─────────────────────────────────────
 if __name__ == "__main__":
     app.run(debug=True)
