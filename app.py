@@ -1,6 +1,6 @@
-/* ───────────────────────────────────────────────
+
    static/js/main.js   (replace the whole file)
-   ─────────────────────────────────────────────── */
+
 document.addEventListener("DOMContentLoaded", () => {
   /* ===  Quick DOM helper  === */
   const $ = (sel) => document.querySelector(sel);
