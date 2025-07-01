@@ -4,7 +4,7 @@ from flask import (
     send_from_directory
 )
 from flask_mail import Mail, Message
-import datetime, os, subprocess
+import datetime, os, subprocess, json, random, string
 
 # ── NEW: secure‑token imports ──────────────────────────
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
@@ -34,6 +34,19 @@ EXT     = "webm"               # browser uploads WebM
 FFMPEG  = "ffmpeg"
 RECDIR  = "/mnt/recordings"    # ← mount your disk here
 os.makedirs(RECDIR, exist_ok=True)
+
+# ── Public link storage (persistent JSON) ───────────────
+LINKS_FILE = "public_links.json"
+if os.path.exists(LINKS_FILE):
+    with open(LINKS_FILE, "r") as f:
+        public_links = json.load(f)
+else:
+    public_links = {}
+
+def save_links():
+    """Persist public_links dict to disk."""
+    with open(LINKS_FILE, "w") as f:
+        json.dump(public_links, f)
 
 # ─────────────────────────────────────────────────────────
 #  Routes
@@ -106,7 +119,7 @@ def recordings(fname):
 def download(fname):
     return send_from_directory(RECDIR, fname, as_attachment=True)
 
-# ---------- NEW: Generate a secure (15‑min) link ---------
+# ---------- 🔒 Secure link (15‑min) ----------------------
 @app.route("/link/secure/<fname>")
 def generate_secure_link(fname):
     fpath = os.path.join(RECDIR, fname)
@@ -114,11 +127,9 @@ def generate_secure_link(fname):
         return jsonify({"status": "fail", "error": "file not found"}), 404
 
     token = serializer.dumps(fname)
-    # request.url_root already ends with '/'
     url = request.url_root.rstrip("/") + "/secure/" + token
     return jsonify({"status": "ok", "url": url})
 
-# ---------- NEW: Serve file via secure token -------------
 @app.route("/secure/<token>")
 def secure_download(token):
     try:
@@ -128,6 +139,45 @@ def secure_download(token):
     except BadSignature:
         return "❌ Invalid link.", 400
 
+    return send_from_directory(RECDIR, fname)
+
+# ---------- 🌐 Public link (permanent) -------------------
+@app.route("/link/public/<fname>", methods=["GET"])
+def get_or_create_public_link(fname):
+    if not os.path.exists(os.path.join(RECDIR, fname)):
+        return jsonify({"status": "fail", "error": "File not found"}), 404
+
+    # Reuse existing token if already present
+    for token, file in public_links.items():
+        if file == fname:
+            url = request.url_root.rstrip("/") + "/public/" + token
+            return jsonify({"status": "ok", "url": url})
+
+    # Generate a new 12‑char random token
+    token = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+    public_links[token] = fname
+    save_links()
+
+    return jsonify({"status": "ok", "url": request.url_root.rstrip("/") + "/public/" + token})
+
+@app.route("/link/public/<fname>", methods=["DELETE"])
+def delete_public_link(fname):
+    removed = False
+    for token, file in list(public_links.items()):
+        if file == fname:
+            del public_links[token]
+            removed = True
+    if removed:
+        save_links()
+        return jsonify({"status": "ok", "message": "Link removed"})
+    else:
+        return jsonify({"status": "fail", "error": "No public link found"}), 404
+
+@app.route("/public/<token>")
+def serve_public_file(token):
+    fname = public_links.get(token)
+    if not fname:
+        return "❌ Invalid or expired link.", 404
     return send_from_directory(RECDIR, fname)
 
 # ---------- Share link via e‑mail ------------------------
@@ -157,10 +207,4 @@ def delete_file(filename):
         return jsonify({"status": "fail", "error": "File not found"}), 404
     try:
         os.remove(file_path)
-        return jsonify({"status": "ok", "message": f"{filename} deleted"})
-    except Exception as e:
-        return jsonify({"status": "fail", "error": str(e)}), 500
-
-# ── Local debug run ──────────────────────────────────────
-if __name__ == "__main__":
-    app.run(debug=True)
+        return jsonify({"status": "
