@@ -115,10 +115,6 @@ def send_email():
 def list_files():
     return "<br>".join(sorted(os.listdir(RECDIR)))
 
-@app.route("/debug/files")
-def list_files():
-    return "<br>".join(sorted(os.listdir(RECDIR)))
-
 # ---------- Delete file by name --------------------------
 @app.route("/delete/<filename>", methods=["POST"])
 def delete_file(filename):
