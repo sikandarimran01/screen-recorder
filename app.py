@@ -288,6 +288,35 @@ def sitemap():
 {chr(10).join(urls)}
 </urlset>"""
     return xml, 200, {"Content-Type": "application/xml"}
+@app.route("/robots.txt")
+def robots():
+    return (
+        "User-agent: *\n"
+        "Disallow:\n"
+        "Sitemap: https://www.grabscreen.com/sitemap.xml\n",
+        200,
+        {"Content-Type": "text/plain"},
+    )
+
+@app.route("/sitemap.xml")
+def sitemap():
+    pages = [
+        "https://www.grabscreen.com/",
+        # You can add more URLs like help, about, etc.
+    ]
+    sitemap_xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    sitemap_xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    for page in pages:
+        sitemap_xml += (
+            "  <url>\n"
+            f"    <loc>{page}</loc>\n"
+            f"    <lastmod>{datetime.datetime.utcnow().date()}</lastmod>\n"
+            "    <changefreq>monthly</changefreq>\n"
+            "    <priority>1.0</priority>\n"
+            "  </url>\n"
+        )
+    sitemap_xml += "</urlset>"
+    return sitemap_xml, 200, {"Content-Type": "application/xml"}
 
 # ──────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
