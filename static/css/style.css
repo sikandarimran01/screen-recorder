@@ -70,7 +70,7 @@ a:hover { text-decoration: underline; }
   z-index: 10;
 }
 #logoBrand img {
-  height: clamp(40px, 8vw, 50px);
+  height: clamp(40px, 8vw, 80px);
   border-radius: 8px;
 }
 .theme-toggle {
