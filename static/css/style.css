@@ -220,6 +220,78 @@ dialog input {
   z-index: 20;
 }
 
+/* ADD THIS TO THE END of static/css/style.css */
+
+/* --- Advanced Clip Trimmer --- */
+#clipPanel {
+  text-align: center;
+}
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+.panel-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+.btn-close {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  font-weight: 300;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+}
+.trim-slider-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+.time-readout {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1rem;
+  color: var(--text);
+  background: var(--input-bg);
+  padding: 0.5rem;
+  border-radius: 5px;
+  min-width: 80px;
+  text-align: center;
+}
+#trim-slider {
+  flex-grow: 1;
+  height: 8px;
+}
+.panel-actions {
+  margin-top: 1.5rem;
+}
+
+/* --- noUiSlider Theme Overrides --- */
+.noUi-target {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+.noUi-connect {
+  background: var(--brand);
+}
+.noUi-handle {
+  border: 2px solid var(--card);
+  background: var(--brand);
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  cursor: grab;
+}
+.noUi-handle:active {
+  cursor: grabbing;
+}
+.noUi-handle::before, .noUi-handle::after {
+  display: none; /* Hide the default handle bars */
+}
+
 /* --- Footer & Animations --- */
 .site-footer { text-align: center; margin-top: 2rem; font-size: 0.9rem; color: var(--muted); }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
