@@ -3,24 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <title>GrabScreen – Free Online Screen Recorder | Record, Trim, Share | No Login & Signup</title>
-
-  <!-- SEO Meta Tags -->
   <meta name="description" content="GrabScreen is a free, fast, and private online screen recorder. Record your screen instantly without installing anything. Save, trim, share, or embed videos in one click." />
-  <meta name="keywords" content="grab screen, online screen recorder, free screen capture, desktop recording, screen video, screen recorder online, no install screen recorder" />
-  <meta name="robots" content="index, follow" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="canonical" href="{{ request.url_root }}" />
-
-  <!-- Social Media Meta -->
   <meta property="og:title" content="GrabScreen – Free Online Screen Recorder" />
-  <meta property="og:description" content="Capture your screen in seconds. No software required. Fast, free, and private." />
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="{{ request.url_root }}" />
   <meta property="og:image" content="{{ url_for('static', filename='logo.png') }}" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:image" content="{{ url_for('static', filename='logo.png') }}" />
-
-  <!-- App Icons & Font Awesome -->
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
@@ -33,29 +20,71 @@
   </div>
   <button id="themeToggle" class="theme-toggle" title="Toggle Theme"><i class="fa-solid"></i></button>
 
-  <h1>🖥️ Online Screen Recorder</h1>
-  <div class="recorder-controls">
-    <button id="startBtn" class="btn start"><i class="fa-solid fa-circle-play"></i> Start Recording</button>
-    <button id="stopBtn" class="btn stop" disabled><i class="fa-solid fa-stop"></i> Stop Recording</button>
-  </div>
-  
-  <p id="statusMsg"></p>
-
-  <!-- Main Preview & Actions Area -->
-  <div id="previewArea" class="hidden">
-    <video id="preview" controls></video>
-    <div id="actionsPanel">
-        <!-- Action buttons will be dynamically inserted here by JS -->
+  <!-- ============================================= -->
+  <!-- View 1: The Main Recorder Interface           -->
+  <!-- ============================================= -->
+  <div id="recorderView">
+    <h1>🖥️ Online Screen Recorder</h1>
+    <div class="recorder-controls">
+      <button id="startBtn" class="btn start"><i class="fa-solid fa-circle-play"></i> Start Recording</button>
+      <button id="stopBtn" class="btn stop" disabled><i class="fa-solid fa-stop"></i> Stop Recording</button>
     </div>
-  </div>
+    
+    <p id="statusMsg"></p>
 
-  <!-- Panels that open on button click -->
-  <section id="clipPanel" class="panel hidden">
-    <h2><i class="fa-solid fa-scissors"></i> Trim Clip</h2>
-    <label>Start (s): <input id="clipStart" type="number" min="0" value="0" /></label>
-    <label>End (s): <input id="clipEnd" type="number" min="1" value="5" /></label>
-    <button id="clipGo" class="btn share"><i class="fa-solid fa-share-nodes"></i> Create & Share Clip</button>
-    <button id="clipCancel" class="btn cancel">Cancel</button>
+    <div id="previewArea" class="hidden">
+      <video id="preview" controls></video>
+      <div id="actionsPanel"></div>
+    </div>
+
+    <section id="clipPanel" class="panel hidden">
+      <h2><i class="fa-solid fa-scissors"></i> Trim Clip</h2>
+      <label>Start (s): <input id="clipStart" type="number" min="0" value="0" /></label>
+      <label>End (s): <input id="clipEnd" type="number" min="1" value="5" /></label>
+      <button id="clipGo" class="btn share"><i class="fa-solid fa-share-nodes"></i> Create & Share Clip</button>
+      <button id="clipCancel" class="btn cancel">Cancel</button>
+    </section>
+
+    <div class="session-controls">
+      <button id="resumeBtn" class="btn hidden"><i class="fa-solid fa-clock-rotate-left"></i> My Recordings</button>
+      <button id="forgetSession" class="btn cancel hidden"><i class="fa-solid fa-user-slash"></i> Forget My Session</button>
+    </div>
+
+    <section id="filesPanel" class="hidden">
+      <h2>Your Recordings</h2>
+      <div id="mediaGrid" class="grid-container"></div>
+    </section>
+  </div> <!-- End of recorderView -->
+
+  <!-- ============================================= -->
+  <!-- View 2: The Privacy Policy Panel (hidden)     -->
+  <!-- ============================================= -->
+  <section id="privacyView" class="info-panel hidden">
+    <button class="btn back-btn"><i class="fa-solid fa-arrow-left"></i> Back to Recorder</button>
+    <h1>Privacy Policy</h1>
+    <p><strong>Last Updated: {{ year }}</strong></p>
+    <p>Your privacy is important to us. This Service is designed to be private and secure.</p>
+    <h2>Information We Collect</h2>
+    <ul>
+      <li><strong>Video Recordings:</strong> The recordings you create are uploaded to our servers and associated with an anonymous session token stored in your browser.</li>
+      <li><strong>Session Token:</strong> We use a cookie ("magic_token") to anonymously identify your browser session so you can access your recordings on a return visit.</li>
+      <li><strong>Email Address (Optional):</strong> If you use the "Email" feature, we use it solely to send the recording link. We do not store or sell this email.</li>
+    </ul>
+    <h2>Data Storage and Deletion</h2>
+    <p>You can delete individual recordings at any time. Forgetting a session removes the link between your browser and your files, but the files themselves are not automatically deleted at that time.</p>
+  </section>
+
+  <!-- ============================================= -->
+  <!-- View 3: The Contact Panel (hidden)            -->
+  <!-- ============================================= -->
+  <section id="contactView" class="info-panel hidden">
+    <button class="btn back-btn"><i class="fa-solid fa-arrow-left"></i> Back to Recorder</button>
+    <h1>Contact Us</h1>
+    <p>If you have any questions, feedback, or concerns, please feel free to reach out.</p>
+    <p>The best way to contact us is via email:</p>
+    <p style="text-align: center; font-size: 1.2rem; margin: 2rem 0;">
+      <a href="mailto:your-email@example.com">your-email@example.com</a>
+    </p>
   </section>
 
   <dialog id="emailModal">
@@ -66,27 +95,18 @@
     <div id="emailStatus"></div>
   </dialog>
 
-  <!-- Session Controls -->
-  <div class="session-controls">
-    <button id="resumeBtn" class="btn hidden"><i class="fa-solid fa-clock-rotate-left"></i> My Recordings</button>
-    <button id="forgetSession" class="btn cancel hidden"><i class="fa-solid fa-user-slash"></i> Forget My Session</button>
-  </div>
-
-  <!-- Grid for past recordings -->
-  <section id="filesPanel" class="hidden">
-    <h2>Your Recordings</h2>
-    <div id="mediaGrid" class="grid-container"></div>
-  </section>
-
   <footer class="site-footer">
     <p>© {{ year }} GrabScreen. All rights reserved.</p>
-    <p><a href="{{ url_for('privacy') }}">Privacy Policy</a> | <a href="{{ url_for('contact') }}">Contact</a></p>
+    <p>
+      <a href="#" id="showPrivacyLink">Privacy Policy</a> | 
+      <a href="#" id="showContactLink">Contact</a>
+    </p>
   </footer>
 </main>
 
 <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
 <script>
-  // Theme Toggler Script (no changes needed here)
+  // Theme Toggler Script (no changes needed)
   const themeToggleBtn = document.getElementById('themeToggle');
   const icon = themeToggleBtn.querySelector('i');
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
