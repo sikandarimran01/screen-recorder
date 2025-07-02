@@ -12,6 +12,9 @@ body.dark {
   --muted: #aaa;
   --border: rgba(255, 255, 255, 0.1);
   --input-bg: #444;
+  /* --- NEW --- */
+  --secondary-bg: #495057;
+  --secondary-text: #fff;
 }
 body.light {
   --bg: #f4f7f9;
@@ -23,6 +26,9 @@ body.light {
   --muted: #6c757d;
   --border: #dee2e6;
   --input-bg: #e9ecef;
+  /* --- NEW --- */
+  --secondary-bg: #e2e6ea;
+  --secondary-text: #212529;
 }
 
 /* --- Base Styles --- */
@@ -93,6 +99,12 @@ a:hover { text-decoration: underline; }
 .btn.stop   { background: var(--danger); }
 .btn.share  { background: var(--brand); }
 .btn.cancel { background: #6c757d; }
+/* --- NEW --- */
+.btn.secondary {
+  background: var(--secondary-bg);
+  color: var(--secondary-text);
+  border: 1px solid var(--border);
+}
 .btn:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-2px); }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
@@ -107,7 +119,7 @@ a:hover { text-decoration: underline; }
   border: 1px solid var(--border);
 }
 
-/* --- NEW: Actions Panel --- */
+/* --- Actions Panel --- */
 #actionsPanel {
   display: flex;
   flex-wrap: wrap;
@@ -144,7 +156,7 @@ dialog input {
 }
 #emailStatus { margin-top: 0.75rem; font-size: 0.9rem; }
 
-/* --- NEW: Interactive Media Grid --- */
+/* --- Interactive Media Grid --- */
 #filesPanel {
   width: 100%;
   text-align: left;
@@ -188,7 +200,6 @@ dialog input {
   animation: fadeOut 0.5s ease forwards;
 }
 
-
 /* --- Info Panels (Privacy/Contact) --- */
 .info-panel {
   text-align: left;
@@ -208,8 +219,19 @@ dialog input {
   position: absolute;
   top: 1rem;
   left: 1rem;
-  z-index: 20; /* Make sure it's above the logo */
+  z-index: 20;
+  /* --- MODIFIED: Apply the new secondary style --- */
+  background: var(--secondary-bg);
+  color: var(--secondary-text);
+  border: 1px solid var(--border);
 }
+/* --- MODIFIED: Make resume button match the back button --- */
+#resumeBtn {
+  background: var(--secondary-bg);
+  color: var(--secondary-text);
+  border: 1px solid var(--border);
+}
+
 
 /* --- Footer & Animations --- */
 .site-footer { text-align: center; margin-top: 2rem; font-size: 0.9rem; color: var(--muted); }
@@ -223,4 +245,8 @@ dialog input {
   .card { padding: 4rem 1rem 1.5rem; }
   .btn { width: 100%; margin: 0.5rem 0; }
   .recorder-controls, .session-controls { display: flex; flex-direction: column; width: 100%; }
+  /* --- NEW: Ensure back button doesn't take full width on mobile --- */
+  .back-btn {
+    width: auto;
+  }
 }
