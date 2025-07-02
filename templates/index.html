@@ -11,28 +11,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="canonical" href="{{ request.url_root }}" />
 
-  <!-- Open Graph / Facebook -->
+  <!-- Social Media Meta -->
   <meta property="og:title" content="GrabScreen – Free Online Screen Recorder" />
   <meta property="og:description" content="Capture your screen in seconds. No software required. Fast, free, and private." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="{{ request.url_root }}" />
-  <meta property="og:image" content="{{ url_for('static', filename='images/preview.jpg') }}" />
-
-  <!-- Twitter Card -->
+  <meta property="og:image" content="{{ url_for('static', filename='logo.png') }}" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="GrabScreen – Free Online Screen Recorder" />
-  <meta name="twitter:description" content="Fast, free online screen recording. No downloads. Share & embed your videos easily." />
-  <meta name="twitter:image" content="{{ url_for('static', filename='images/preview.jpg') }}" />
+  <meta name="twitter:image" content="{{ url_for('static', filename='logo.png') }}" />
 
-  <!-- App Icons -->
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}" sizes="32x32" />
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}" sizes="192x192" />
-  <link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon.png') }}" />
-
-  <!-- Font Awesome Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" />
-
-  <!-- Custom Styles -->
+  <!-- App Icons & Font Awesome -->
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
 </head>
 
@@ -41,79 +31,73 @@
   <div id="logoBrand">
     <img src="{{ url_for('static', filename='logo.png') }}" alt="GrabScreen Logo" />
   </div>
-
-  <button id="themeToggle" class="theme-toggle" title="Toggle Theme">
-    <i class="fa-solid"></i>
-  </button>
+  <button id="themeToggle" class="theme-toggle" title="Toggle Theme"><i class="fa-solid"></i></button>
 
   <h1>🖥️ Online Screen Recorder</h1>
-  <button id="startBtn" class="btn start">▶ Start Recording</button>
-  <button id="stopBtn" class="btn stop" disabled>⏹ Stop Recording</button>
-
+  <div class="recorder-controls">
+    <button id="startBtn" class="btn start"><i class="fa-solid fa-circle-play"></i> Start Recording</button>
+    <button id="stopBtn" class="btn stop" disabled><i class="fa-solid fa-stop"></i> Stop Recording</button>
+  </div>
+  
   <p id="statusMsg"></p>
-  <video id="preview" controls class="hidden"></video>
 
-  <div id="shareWrap" class="hidden">
-    <button id="shareBtn" class="btn share">📤 Share ▼</button>
-    <ul id="shareMenu" class="dropdown">
-      <li><button id="copySecure">🔒 Secure Link (15 min)</button></li>
-      <li><button id="copyLink">🔗 Copy Link</button></li>
-      <li><button id="shareEmail">📧 Email</button></li>
-      <li><button id="openClip">✂️ Share Clip</button></li>
-      
-    </ul>
+  <!-- Main Preview & Actions Area -->
+  <div id="previewArea" class="hidden">
+    <video id="preview" controls></video>
+    <div id="actionsPanel">
+        <!-- Action buttons will be dynamically inserted here by JS -->
+    </div>
   </div>
 
+  <!-- Panels that open on button click -->
   <section id="clipPanel" class="panel hidden">
-    <h2>✂ Trim Clip</h2>
+    <h2><i class="fa-solid fa-scissors"></i> Trim Clip</h2>
     <label>Start (s): <input id="clipStart" type="number" min="0" value="0" /></label>
     <label>End (s): <input id="clipEnd" type="number" min="1" value="5" /></label>
-    <button id="clipGo" class="btn share">📤 Share Clip</button>
+    <button id="clipGo" class="btn share"><i class="fa-solid fa-share-nodes"></i> Create & Share Clip</button>
     <button id="clipCancel" class="btn cancel">Cancel</button>
   </section>
+
   <dialog id="emailModal">
-    <h2>📧 Send Recording</h2>
-    <label>
-      To (email): <input id="emailTo" type="email" placeholder="example@domain.com" required />
-    </label>
-    <button id="emailSend" class="btn share">📤 Send</button>
-    <button id="emailClose" class="btn cancel">Cancel</button>
-    <div id="emailStatus" style="margin-top:.75rem;font-size:.9rem;"></div>
+    <h2><i class="fa-solid fa-envelope"></i> Send Recording</h2>
+    <label>To (email): <input id="emailTo" type="email" placeholder="example@domain.com" required /></label>
+    <button id="emailSend" class="btn share"><i class="fa-solid fa-paper-plane"></i> Send</button>
+    <button id="emailClose" class="btn cancel" formmethod="dialog">Cancel</button>
+    <div id="emailStatus"></div>
   </dialog>
 
+  <!-- Session Controls -->
   <div class="session-controls">
-    <button id="resumeBtn" class="btn hidden">🔄 Resume My Recordings</button>
-    <button id="forgetSession" class="btn cancel hidden">🗑️ Forget My Session</button>
+    <button id="resumeBtn" class="btn hidden"><i class="fa-solid fa-clock-rotate-left"></i> My Recordings</button>
+    <button id="forgetSession" class="btn cancel hidden"><i class="fa-solid fa-user-slash"></i> Forget My Session</button>
   </div>
 
-  <section id="filesPanel" class="media-grid hidden">
+  <!-- Grid for past recordings -->
+  <section id="filesPanel" class="hidden">
     <h2>Your Recordings</h2>
     <div id="mediaGrid" class="grid-container"></div>
   </section>
 
   <footer class="site-footer">
-    <p>© 2025 YourBrand. All rights reserved.</p>
-    <p><a href="#">Privacy Policy</a> | <a href="#">Contact</a></p>
+    <p>© {{ year }} GrabScreen. All rights reserved.</p>
+    <p><a href="{{ url_for('privacy') }}">Privacy Policy</a> | <a href="{{ url_for('contact') }}">Contact</a></p>
   </footer>
 </main>
 
 <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
-
 <script>
+  // Theme Toggler Script (no changes needed here)
   const themeToggleBtn = document.getElementById('themeToggle');
   const icon = themeToggleBtn.querySelector('i');
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   const savedTheme = localStorage.getItem('theme');
-
   const setTheme = theme => {
     document.body.classList.remove('light', 'dark');
     document.body.classList.add(theme);
     icon.className = theme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
     localStorage.setItem('theme', theme);
   };
-
   setTheme(savedTheme || (prefersDark ? 'dark' : 'light'));
-
   themeToggleBtn.onclick = () => {
     const current = document.body.classList.contains('dark') ? 'dark' : 'light';
     setTheme(current === 'dark' ? 'light' : 'dark');
