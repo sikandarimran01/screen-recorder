@@ -1,6 +1,7 @@
-"""
-app.py – GrabScreen backend (magic‑token sessions, public links, mail)
-"""
+#
+# app.py - The corrected and final version for GrabScreen
+# This version includes the critical fix for serving static files.
+#
 
 from flask import (
     Flask, render_template, request, jsonify,
@@ -12,13 +13,14 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from urllib.parse import urljoin
 
 # --- FIX: Explicitly define project paths for robustness ---
-# This ensures Flask knows where to find your templates and static files,
-# which is the cause of the missing CSS styling.
+# This is the most important part. It tells Flask exactly where to find
+# your 'templates' and 'static' folders, which solves the 404 error
+# for style.css, main.js, and all your images.
 project_root = os.path.dirname(os.path.realpath(__file__))
 template_folder = os.path.join(project_root, 'templates')
 static_folder = os.path.join(project_root, 'static')
 
-# --- MODIFIED: Pass the explicit folder paths to the Flask app ---
+# --- MODIFIED: The app is initialized with the correct paths ---
 app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
 
 
