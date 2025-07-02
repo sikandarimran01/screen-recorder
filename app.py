@@ -34,45 +34,30 @@ app.config.update(
     MAIL_DEFAULT_SENDER=("GrabScreen", os.getenv("MAIL_USERNAME")),
 )
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
+# ... (rest of the file is correct)
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 TOKEN_EXPIRY_SECONDS = 15 * 60
-
 mail = Mail(app)
-
-# ── Paths & storage files ────────────────────────────────────────────────────
 RECDIR = "/mnt/recordings"
 os.makedirs(RECDIR, exist_ok=True)
 LINKS_FILE = "public_links.json"
 SESSIONS_FILE = "user_sessions.json"
-
-def _load_json(path):
-    return json.load(open(path)) if os.path.exists(path) else {}
-
+def _load_json(path): return json.load(open(path)) if os.path.exists(path) else {}
 def _save_json(obj, path):
-    with open(path, "w") as f:
-        json.dump(obj, f, indent=2)
-
+    with open(path, "w") as f: json.dump(obj, f, indent=2)
 public_links = _load_json(LINKS_FILE)
 user_sessions = _load_json(SESSIONS_FILE)
-
-# ──────────────────────────────────────────────────────────────────────────────
-# (The rest of your app.py file is completely correct and unchanged)
-# ──────────────────────────────────────────────────────────────────────────────
-
 @app.route("/")
-def index():
-    return render_template("index.html", year=datetime.datetime.now().year)
-
+def index(): return render_template("index.html", year=datetime.datetime.now().year)
+# ... (all other routes are correct and unchanged)
 @app.route("/session/files")
 def session_files():
     token = request.cookies.get("magic_token")
-    if not token or token not in user_sessions:
-        return jsonify({"status": "empty", "files": []})
+    if not token or token not in user_sessions: return jsonify({"status": "empty", "files": []})
     files = [f for f in user_sessions[token] if os.path.exists(os.path.join(RECDIR, f))]
     if len(files) != len(user_sessions[token]):
         user_sessions[token] = files; _save_json(user_sessions, SESSIONS_FILE)
     return jsonify({"status": "ok", "files": files})
-
 @app.route("/session/forget", methods=["POST"])
 def forget_session():
     token = request.cookies.get("magic_token")
@@ -81,12 +66,10 @@ def forget_session():
     resp = jsonify({"status": "ok"})
     resp.set_cookie("magic_token", "", expires=0)
     return resp
-
 @app.route("/upload", methods=["POST"])
 def upload():
     video_file = request.files.get("video")
-    if not video_file:
-        return jsonify({"status": "fail", "error": "No file"}), 400
+    if not video_file: return jsonify({"status": "fail", "error": "No file"}), 400
     fname = datetime.datetime.now().strftime(f"recording_%Y%m%d_%H%M%S.webm")
     save_path = os.path.join(RECDIR, fname)
     try: video_file.save(save_path)
@@ -99,7 +82,6 @@ def upload():
     resp = jsonify({"status": "ok", "filename": fname})
     resp.set_cookie("magic_token", token, max_age=365*24*60*60, samesite="Lax")
     return resp
-
 @app.route("/clip/<orig>", methods=["POST"])
 def clip(orig):
     try:
@@ -121,27 +103,21 @@ def clip(orig):
         return jsonify({"status": "ok", "clip": out_name})
     except subprocess.CalledProcessError as e:
         return jsonify({"status": "fail", "error": e.stderr}), 500
-
 @app.route("/recordings/<fname>")
 def recordings(fname): return send_from_directory(RECDIR, fname)
-
 @app.route("/download/<fname>")
 def download(fname): return send_from_directory(RECDIR, fname, as_attachment=True)
-
 @app.route("/link/secure/<fname>")
 def link_secure(fname):
-    if not os.path.exists(os.path.join(RECDIR, fname)):
-        return jsonify({"status": "fail", "error": "file not found"}), 404
+    if not os.path.exists(os.path.join(RECDIR, fname)): return jsonify({"status": "fail", "error": "file not found"}), 404
     token = serializer.dumps(fname)
     return jsonify({"status": "ok", "url": urljoin(request.url_root, f"secure/{token}")})
-
 @app.route("/secure/<token>")
 def secure_download(token):
     try: fname = serializer.loads(token, max_age=TOKEN_EXPIRY_SECONDS)
     except SignatureExpired: return "⏳ Link expired", 410
     except BadSignature: return "❌ Invalid link", 400
     return send_from_directory(RECDIR, fname)
-
 @app.route("/link/public/<fname>", methods=["GET", "DELETE"])
 def link_public(fname):
     global public_links
@@ -158,13 +134,11 @@ def link_public(fname):
         if f == fname: del public_links[t]; removed = True
     if removed: _save_json(public_links, LINKS_FILE); return jsonify({"status": "ok"})
     return jsonify({"status": "fail", "error": "No public link"}), 404
-
 @app.route("/public/<token>")
 def public_file(token):
     fname = public_links.get(token)
     if not fname or not os.path.exists(os.path.join(RECDIR, fname)): return "❌ Invalid/expired", 404
     return send_from_directory(RECDIR, fname)
-
 @app.route("/send_email", methods=["POST"])
 def send_email():
     data = request.get_json(force=True)
@@ -172,7 +146,6 @@ def send_email():
         mail.send(Message("GrabScreen recording", recipients=[data["to"]], body=f"Hi, here is your recording:\n{data['url']}"))
         return jsonify({"status": "ok"})
     except Exception as e: return jsonify({"status": "fail", "error": str(e)}), 500
-
 @app.route("/delete/<fname>", methods=["POST"])
 def delete_file(fname):
     fp = os.path.join(RECDIR, fname)
@@ -185,16 +158,12 @@ def delete_file(fname):
         if f == fname: del public_links[t]
     _save_json(public_links, LINKS_FILE)
     return jsonify({"status": "ok"})
-
 @app.route('/google0e43e35e51dba342.html')
-def google_verification():
-    return send_from_directory('static', 'google0e43e35e51dba342.html')
-
+def google_verification(): return send_from_directory('static', 'google0e43e35e51dba342.html')
 @app.route("/robots.txt")
 def robots():
     lines = [ "User-agent: *", "Allow: /", f"Sitemap: {urljoin(request.url_root, 'sitemap.xml')}" ]
     return "\n".join(lines), 200, {"Content-Type": "text/plain"}
-
 @app.route("/sitemap.xml")
 def sitemap():
     base = request.url_root.rstrip("/")
@@ -207,6 +176,4 @@ def sitemap():
         urls.append(url(f"{base}/public/{token}", "0.6"))
     xml = f"""<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{chr(10).join(urls)}</urlset>"""
     return xml, 200, {"Content-Type": "application/xml"}
-
-if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+if __name__ == "__main__": app.run(debug=True, port=5001)
