@@ -257,8 +257,13 @@ def delete_file(fname):
     return jsonify({"status": "ok"})
 
 # ──────────────────────────────────────────────────────────────────────────────
-# robots.txt & sitemap.xml  ↴  (for faster indexing)
+# SEO & Site Verification Routes  ↴
 # ──────────────────────────────────────────────────────────────────────────────
+
+# --- Google Site Verification Route ---
+@app.route('/google0e43e35e51dba342.html')
+def google_verification():
+    return send_from_directory('static', 'google0e43e35e51dba342.html')
 
 @app.route("/robots.txt")
 def robots():
@@ -280,6 +285,8 @@ def sitemap():
 
     # homepage + every public link
     urls = [url(f"{base}/", "1.0")]
+    global public_links
+    public_links = _load_json(LINKS_FILE) # ensure we have the latest links
     for token, fname in public_links.items():
         urls.append(url(f"{base}/public/{token}", "0.6"))
 
