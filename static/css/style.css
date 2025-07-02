@@ -6,7 +6,8 @@ body.dark {
   --bg: #1f1f1f;
   --card: #2c2c2c;
   --brand: #0d6efd;
-  --success: #198754;
+  /* --- EXPERIMENTAL COLOR --- */
+  --success: #FF00FF; /* Bright Pink */
   --danger: #dc3545;
   --warn: #ffc107; 
   --text: #f5f5f5;
@@ -20,7 +21,8 @@ body.light {
   --bg: #f4f7f9;
   --card: #ffffff;
   --brand: #0d6efd;
-  --success: #198754;
+  /* --- EXPERIMENTAL COLOR --- */
+  --success: #FF00FF; /* Bright Pink */
   --danger: #dc3545;
   --warn: #ffc107;
   --text: #212529;
@@ -45,7 +47,12 @@ body {
   color: var(--text);
   transition: background 0.3s ease, color 0.3s ease;
 }
-h1, h2 { color: var(--text); }
+
+/* --- EXPERIMENTAL COLOR --- */
+h1 {
+  color: #00FF00 !important; /* Bright Green */
+}
+h2 { color: var(--text); }
 a { color: var(--brand); text-decoration: none; }
 a:hover { text-decoration: underline; }
 .hidden { display: none !important; }
@@ -91,8 +98,6 @@ a:hover { text-decoration: underline; }
 }
 
 /* --- Buttons --- */
-/* This structure works because every .btn gets a visible default style.
-   Then, more specific classes like .btn.start override that default. */
 .btn {
   border: none;
   cursor: pointer;
@@ -121,11 +126,8 @@ a:hover { text-decoration: underline; }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* --- Other styles --- */
-/* (The rest of the file is identical to what you provided and is correct) */
-
-.recorder-controls, .session-controls { 
-  display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.5rem; margin: 1rem 0; 
-}
+/* (The rest of the file is correct) */
+.recorder-controls, .session-controls { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.5rem; margin: 1rem 0; }
 #statusMsg { min-height: 1.5em; color: var(--muted); }
 #previewArea video { width: 100%; border-radius: var(--radius); margin-top: 1rem; background: #000; border: 1px solid var(--border); }
 #actionsPanel { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; padding: 1rem; margin-top: 1rem; background: rgba(0,0,0,0.05); border-radius: var(--radius); }
