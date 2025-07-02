@@ -8,11 +8,13 @@ body.dark {
   --brand: #0d6efd;
   --success: #198754;
   --danger: #dc3545;
+  /* --- NEW --- */
+  --warn: #ffc107; 
   --text: #f5f5f5;
   --muted: #aaa;
   --border: rgba(255, 255, 255, 0.1);
   --input-bg: #444;
-  --secondary-bg: #495057; /* A neutral gray for default buttons */
+  --secondary-bg: #495057;
   --secondary-text: #fff;
 }
 body.light {
@@ -21,11 +23,13 @@ body.light {
   --brand: #0d6efd;
   --success: #198754;
   --danger: #dc3545;
+  /* --- NEW --- */
+  --warn: #ffc107;
   --text: #212529;
   --muted: #6c757d;
   --border: #dee2e6;
   --input-bg: #e9ecef;
-  --secondary-bg: #6c757d; /* A neutral gray for default buttons */
+  --secondary-bg: #6c757d;
   --secondary-text: #fff;
 }
 
@@ -90,24 +94,30 @@ a:hover { text-decoration: underline; }
   justify-content: center;
   gap: 0.5rem;
   transition: all 0.2s ease;
-  
-  /* --- FIX: Set a VISIBLE DEFAULT for ALL buttons --- */
   background: var(--secondary-bg);
   color: var(--secondary-text);
 }
 .btn i { line-height: 1; }
 
-/* --- FIX: Specific button styles now OVERRIDE the default --- */
 .btn.start  { background: var(--success); color: #fff; }
 .btn.stop   { background: var(--danger);  color: #fff; }
 .btn.share  { background: var(--brand);   color: #fff; }
 .btn.cancel { background: #6c757d;      color: #fff; }
+/* --- NEW --- */
+.btn.warn { background: var(--warn); color: #000; }
 
 .btn:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-2px); }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* --- Recorder & Preview Area --- */
-.recorder-controls, .session-controls { margin: 1rem 0; }
+.recorder-controls, .session-controls { 
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1rem 0; 
+}
 #statusMsg { min-height: 1.5em; color: var(--muted); }
 #previewArea video {
   width: 100%;
@@ -220,8 +230,6 @@ dialog input {
   z-index: 20;
 }
 
-/* ADD THIS TO THE END of static/css/style.css */
-
 /* --- Advanced Clip Trimmer --- */
 #clipPanel {
   text-align: center;
@@ -289,7 +297,7 @@ dialog input {
   cursor: grabbing;
 }
 .noUi-handle::before, .noUi-handle::after {
-  display: none; /* Hide the default handle bars */
+  display: none;
 }
 
 /* --- Footer & Animations --- */
@@ -302,8 +310,11 @@ dialog input {
 @media (max-width: 640px) {
   body { padding: 1rem; }
   .card { padding: 4rem 1rem 1.5rem; }
-  .btn { width: 100%; margin: 0.5rem 0; }
-  .recorder-controls, .session-controls { display: flex; flex-direction: column; width: 100%; }
+  /* Make all buttons in a control group take up full width on mobile */
+  .recorder-controls .btn, .session-controls .btn { 
+    width: 100%; 
+    margin: 0.25rem 0;
+  }
   .back-btn {
     width: auto;
   }
