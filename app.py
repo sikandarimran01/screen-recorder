@@ -1,4 +1,4 @@
-# app.py (Updated Version)
+# app.py (Simplified Version)
 
 from flask import (
     Flask, render_template, request, jsonify,
@@ -10,7 +10,7 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 app = Flask(__name__)
 
-# ── Mail config (set via ENV in Render) ─────────────────
+# ... (all your config remains the same) ...
 app.config.update(
     MAIL_SERVER="smtp.gmail.com",
     MAIL_PORT=587,
@@ -19,21 +19,12 @@ app.config.update(
     MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),
     MAIL_DEFAULT_SENDER=("GrabScreen", os.getenv("MAIL_USERNAME")),
 )
-
-# ── Security settings ───────────────────────────────────
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
-TOKEN_EXPIRY_SECONDS = 15 * 60  # 15 minutes
-
+TOKEN_EXPIRY_SECONDS = 15 * 60
 mail = Mail(app)
-
-# ── Storage paths ───────────────────────────────────────
-EXT     = "webm"
-FFMPEG  = "ffmpeg"
 RECDIR  = "/mnt/recordings"
 os.makedirs(RECDIR, exist_ok=True)
-
-# ── Persistent public link storage ──────────────────────
 LINKS_FILE = "public_links.json"
 SESSIONS_FILE = "user_sessions.json"
 
@@ -49,6 +40,8 @@ def save_json(data, file_path):
 
 public_links = load_json(LINKS_FILE)
 user_sessions = load_json(SESSIONS_FILE)
+# ... (all your config remains the same) ...
+
 
 # ─────────────────────────────────────────────────────────
 # Routes
@@ -58,15 +51,9 @@ user_sessions = load_json(SESSIONS_FILE)
 def index():
     return render_template("index.html", year=datetime.datetime.now().year)
 
-# NEW: Route for Privacy Policy
-@app.route("/privacy")
-def privacy():
-    return render_template("privacy.html", year=datetime.datetime.now().year)
-
-# NEW: Route for Contact Page
-@app.route("/contact")
-def contact():
-    return render_template("contact.html")
+# THE /privacy AND /contact ROUTES HAVE BEEN REMOVED.
+# The rest of your app.py routes remain exactly the same.
+# All other routes from /upload to /delete/<filename> are still here.
 
 @app.route("/upload", methods=["POST"])
 def upload():
@@ -100,7 +87,6 @@ def session_files():
     if not token or token not in user_sessions:
         return jsonify({"status": "empty", "files": []})
     
-    # Filter out files that no longer exist on disk
     existing_files = [f for f in user_sessions.get(token, []) if os.path.exists(os.path.join(RECDIR, f))]
     if len(existing_files) != len(user_sessions.get(token, [])):
         user_sessions[token] = existing_files
@@ -139,7 +125,7 @@ def clip(orig):
     duration = end - start
 
     cmd = [
-        FFMPEG, "-hide_banner", "-loglevel", "error",
+        "ffmpeg", "-hide_banner", "-loglevel", "error",
         "-ss", str(start), "-t", str(duration), "-i", in_path,
         "-c:v", "libvpx-vp9", "-b:v", "1M",
         "-c:a", "libopus", "-b:a", "128k",
@@ -148,7 +134,6 @@ def clip(orig):
 
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
-        # Add new clip to the current user's session
         token = request.cookies.get("magic_token")
         if token and token in user_sessions:
             user_sessions[token].append(clip_name)
@@ -248,14 +233,10 @@ def delete_file(filename):
         return jsonify({"status": "fail", "error": "File not found"}), 404
     try:
         os.remove(file_path)
-
-        # Remove from user sessions
         token = request.cookies.get("magic_token")
         if token and token in user_sessions and filename in user_sessions[token]:
             user_sessions[token].remove(filename)
             save_json(user_sessions, SESSIONS_FILE)
-        
-        # Remove from public links
         global public_links
         public_links = load_json(LINKS_FILE)
         for t, f in list(public_links.items()):
@@ -267,6 +248,5 @@ def delete_file(filename):
     except Exception as e:
         return jsonify({"status": "fail", "error": str(e)}), 500
 
-# ── Local testing ────────────────────────────────────────
 if __name__ == "__main__":
     app.run(debug=True, port=5001)
