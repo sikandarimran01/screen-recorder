@@ -12,8 +12,7 @@ body.dark {
   --muted: #aaa;
   --border: rgba(255, 255, 255, 0.1);
   --input-bg: #444;
-  /* --- NEW --- */
-  --secondary-bg: #495057;
+  --secondary-bg: #495057; /* A neutral gray for default buttons */
   --secondary-text: #fff;
 }
 body.light {
@@ -26,9 +25,8 @@ body.light {
   --muted: #6c757d;
   --border: #dee2e6;
   --input-bg: #e9ecef;
-  /* --- NEW --- */
-  --secondary-bg: #e2e6ea;
-  --secondary-text: #212529;
+  --secondary-bg: #6c757d; /* A neutral gray for default buttons */
+  --secondary-text: #fff;
 }
 
 /* --- Base Styles --- */
@@ -86,25 +84,25 @@ a:hover { text-decoration: underline; }
   padding: 0.75rem 1.5rem;
   border-radius: var(--radius);
   margin: 0.25rem;
-  color: #fff;
-  transition: all 0.2s ease;
   font-weight: 500;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-}
-.btn i { line-height: 1; }
-.btn.start  { background: var(--success); }
-.btn.stop   { background: var(--danger); }
-.btn.share  { background: var(--brand); }
-.btn.cancel { background: #6c757d; }
-/* --- NEW --- */
-.btn.secondary {
+  transition: all 0.2s ease;
+  
+  /* --- FIX: Set a VISIBLE DEFAULT for ALL buttons --- */
   background: var(--secondary-bg);
   color: var(--secondary-text);
-  border: 1px solid var(--border);
 }
+.btn i { line-height: 1; }
+
+/* --- FIX: Specific button styles now OVERRIDE the default --- */
+.btn.start  { background: var(--success); color: #fff; }
+.btn.stop   { background: var(--danger);  color: #fff; }
+.btn.share  { background: var(--brand);   color: #fff; }
+.btn.cancel { background: #6c757d;      color: #fff; }
+
 .btn:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-2px); }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
@@ -220,18 +218,7 @@ dialog input {
   top: 1rem;
   left: 1rem;
   z-index: 20;
-  /* --- MODIFIED: Apply the new secondary style --- */
-  background: var(--secondary-bg);
-  color: var(--secondary-text);
-  border: 1px solid var(--border);
 }
-/* --- MODIFIED: Make resume button match the back button --- */
-#resumeBtn {
-  background: var(--secondary-bg);
-  color: var(--secondary-text);
-  border: 1px solid var(--border);
-}
-
 
 /* --- Footer & Animations --- */
 .site-footer { text-align: center; margin-top: 2rem; font-size: 0.9rem; color: var(--muted); }
@@ -245,7 +232,6 @@ dialog input {
   .card { padding: 4rem 1rem 1.5rem; }
   .btn { width: 100%; margin: 0.5rem 0; }
   .recorder-controls, .session-controls { display: flex; flex-direction: column; width: 100%; }
-  /* --- NEW: Ensure back button doesn't take full width on mobile --- */
   .back-btn {
     width: auto;
   }
