@@ -1,30 +1,34 @@
-#
-# app.py - The corrected and final version for GrabScreen
-# This version includes the critical fix for serving static files.
-#
+"""
+app.py – Final Diagnostic Version
+This version includes an explicit /version-check route to confirm deployment.
+"""
 
 from flask import (
     Flask, render_template, request, jsonify,
-    send_from_directory, make_response
+    send_from_directory
 )
+# ... (all other imports are correct) ...
 from flask_mail import Mail, Message
 import datetime, os, subprocess, json, random, string, uuid
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from urllib.parse import urljoin
 
-# --- FIX: Explicitly define project paths for robustness ---
-# This is the most important part. It tells Flask exactly where to find
-# your 'templates' and 'static' folders, which solves the 404 error
-# for style.css, main.js, and all your images.
+
+# --- THIS IS THE CRITICAL FIX FOR THE CSS 404 ERROR ---
 project_root = os.path.dirname(os.path.realpath(__file__))
 template_folder = os.path.join(project_root, 'templates')
 static_folder = os.path.join(project_root, 'static')
-
-# --- MODIFIED: The app is initialized with the correct paths ---
 app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
 
 
+# --- THIS IS THE NEW DIAGNOSTIC ROUTE ---
+@app.route("/version-check")
+def version_check():
+    return "SUCCESS: The latest app.py with the explicit path fix is running."
+
+
 # ── Config ───────────────────────────────────────────────────────────────────
+# ... (All your configuration is correct) ...
 app.config.update(
     MAIL_SERVER="smtp.gmail.com",
     MAIL_PORT=587,
@@ -34,7 +38,6 @@ app.config.update(
     MAIL_DEFAULT_SENDER=("GrabScreen", os.getenv("MAIL_USERNAME")),
 )
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
-# ... (rest of the file is correct)
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 TOKEN_EXPIRY_SECONDS = 15 * 60
 mail = Mail(app)
@@ -47,9 +50,16 @@ def _save_json(obj, path):
     with open(path, "w") as f: json.dump(obj, f, indent=2)
 public_links = _load_json(LINKS_FILE)
 user_sessions = _load_json(SESSIONS_FILE)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# (All your other routes from here on are correct)
+# ──────────────────────────────────────────────────────────────────────────────
 @app.route("/")
-def index(): return render_template("index.html", year=datetime.datetime.now().year)
-# ... (all other routes are correct and unchanged)
+def index():
+    return render_template("index.html", year=datetime.datetime.now().year)
+
+# (I'm omitting the rest of the routes for brevity, but they are all in your file)
+# ... ALL YOUR OTHER ROUTES FROM /session/files TO THE END ...
 @app.route("/session/files")
 def session_files():
     token = request.cookies.get("magic_token")
