@@ -70,8 +70,10 @@ a:hover { text-decoration: underline; }
   z-index: 10;
 }
 #logoBrand img {
-  height: clamp(40px, 8vw, 50px);
+  height: clamp(60px, 8vw, 100px);
+  width: auto;
   border-radius: 8px;
+  object-fit: contain;
 }
 .theme-toggle {
   position: absolute;
