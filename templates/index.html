@@ -13,7 +13,7 @@
   <!-- Icons & Fonts -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
   
-  <!-- PERMANENT FIX: Removed integrity and crossorigin attributes to prevent future blocking -->
+  <!-- noUiSlider Library -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css" />
   
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
@@ -21,19 +21,22 @@
 
 <body>
 <main class="card fade-in">
-  <!-- ... (logo and theme toggle are unchanged) ... -->
   <div id="logoBrand">
     <img src="{{ url_for('static', filename='logo.png') }}" alt="GrabScreen Logo" />
   </div>
   <button id="themeToggle" class="theme-toggle" title="Toggle Theme"><i class="fa-solid"></i></button>
 
   <div id="recorderView">
-    <!-- ... (rest of the recorder view is unchanged) ... -->
     <h1>🖥️ Online Screen Recorder</h1>
+    
+    <!-- MODIFIED: Updated recorder controls for Pause/Resume feature -->
     <div class="recorder-controls">
       <button id="startBtn" class="btn start"><i class="fa-solid fa-circle-play"></i> Start Recording</button>
-      <button id="stopBtn" class="btn stop" disabled><i class="fa-solid fa-stop"></i> Stop Recording</button>
+      <button id="pauseBtn" class="btn warn hidden"><i class="fa-solid fa-pause"></i> Pause</button>
+      <button id="resumeBtn" class="btn start hidden"><i class="fa-solid fa-play"></i> Resume</button>
+      <button id="stopBtn" class="btn stop hidden"><i class="fa-solid fa-stop"></i> Stop</button>
     </div>
+    
     <p id="statusMsg"></p>
     <div id="previewArea" class="hidden">
       <video id="preview" controls></video>
@@ -53,9 +56,11 @@
         <button id="clipGo" class="btn share"><i class="fa-solid fa-share-nodes"></i> Create & Share Clip</button>
       </div>
     </section>
+
+    <!-- MODIFIED: Button ID changed to avoid conflict -->
     <div class="session-controls">
-      <button id="resumeBtn" class="btn hidden"><i class="fa-solid fa-clock-rotate-left"></i> My Recordings</button>
-      <button id="forgetSession" class="btn cancel hidden"><i class="fa-solid fa-user-slash"></i> Forget My Session</button>
+      <button id="sessionBtn" class="btn hidden"><i class="fa-solid fa-clock-rotate-left"></i> My Recordings</button>
+      <button id="forgetBtn" class="btn cancel hidden"><i class="fa-solid fa-user-slash"></i> Forget My Session</button>
     </div>
     <section id="filesPanel" class="hidden">
       <h2>Your Recordings</h2>
@@ -63,18 +68,17 @@
     </section>
   </div>
 
-  <!-- ... (info panels, dialog, and footer are unchanged) ... -->
+  <!-- Info Panels (Privacy/Contact) -->
   <section id="privacyView" class="info-panel hidden">
-    <button class="btn back-btn"><i class="fa-solid fa-arrow-left"></i> Back to Recorder</button>
-    <h1>Privacy Policy</h1>
-    <p><strong>Last Updated: {{ year }}</strong></p>
-    <p>Your privacy is important to us...</p>
+      <button class="btn back-btn"><i class="fa-solid fa-arrow-left"></i> Back to Recorder</button>
+      <h1>Privacy Policy for GrabScreen</h1><p><strong>Last Updated: {{ year }}</strong></p><p>Your privacy isn't just a policy; it's a core feature of GrabScreen. This service is engineered to be as anonymous and ephemeral as you need it to be. We don't have user accounts, and we never ask for personal information to use the core service.</p><p>Here’s a transparent breakdown of what data we handle and why:</p><h2 style="margin-top: 2rem;">What We Handle and Why</h2><ul><li><strong>Your Screen Recordings:</strong> The video and audio streams you capture are uploaded to our secure cloud servers (hosted on Render.com).<br><strong>Purpose:</strong> This is essential for the service to function, allowing you to view, download, trim, and generate shareable links for your recordings.</li><li><strong>Your Anonymous Session Key:</strong> When you first use GrabScreen, we generate a random, anonymous key (a "magic_token") and store it in your browser's cookies. This key is a long string of random characters and is not tied to your personal identity.<br><strong>Purpose:</strong> This key acts like a temporary claim ticket. It allows you to close your browser and return later to find your list of recordings without needing a password.</li><li><strong>Email Address (When Sharing):</strong> If you choose to use the "Email" feature, we handle the recipient's email address.<br><strong>Purpose:</strong> This is a transactional use only. The address is passed directly to our mail server (via Gmail's trusted SMTP service) to send the single email you requested. We do not store, log, or add this email to any mailing lists.</li></ul><h2 style="margin-top: 2rem;">Your Control is Our Priority</h2><p>You have complete and granular control over your data through the features we've built:</p><ul><li><strong>Deleting a Recording:</strong> When you click the "Delete" button for a recording, you are sending a command to permanently erase the video file from our server's disk. This action is irreversible and also invalidates any shareable links you may have created for it.</li><li><strong>Secure Links:</strong> These links are cryptographically signed and time-limited (15 minutes). They are designed for secure, temporary sharing. After the time expires, the link becomes permanently invalid.</li><li><strong>Public Links:</strong> Creating a "Public Link" makes your video accessible to anyone with that specific, hard-to-guess URL. You are in control of who you share this link with. Deleting the recording will also disable this link.</li><li><strong>The "Forget My Session" Button:</strong> This is your privacy "kill switch." Clicking it does two things: it deletes the anonymous key from your browser and erases the server-side record linking that key to your list of files. After this, your browser is a complete stranger to our service again.<br><em>(Important: This action severs the link between your browser and your files, but for security and operational reasons, it does not automatically delete the underlying video files themselves. You should delete recordings individually before forgetting your session if you want them gone forever.)</em></li></ul><h2 style="margin-top: 2rem;">Third Parties</h2><p>We do not sell, rent, or share your recordings or personal data with any third-party advertisers. Our only third-party services are for core infrastructure:<br>- <strong>Render.com:</strong> For secure application and database hosting.<br>- <strong>Cloudflare/cdnjs:</strong> For delivering common libraries like Font Awesome and noUiSlider.</p>
   </section>
   <section id="contactView" class="info-panel hidden">
-    <button class="btn back-btn"><i class="fa-solid fa-arrow-left"></i> Back to Recorder</button>
-    <h1>Contact Us</h1>
-    <p>The best way to contact us is via email...</p>
+      <button class="btn back-btn"><i class="fa-solid fa-arrow-left"></i> Back to Recorder</button>
+      <h1>Get in Touch</h1><p>We're actively developing GrabScreen and value your input. Whether you have a feature idea, encountered a bug, or just have a question, we'd love to hear from you.</p><h2 style="margin-top: 2rem;">What kind of feedback is helpful?</h2><ul><li><strong>Bug Reports:</strong> If something isn't working, tell us! Please include what browser you're using (e.g., Chrome, Firefox) and the steps you took that led to the error. Any console error messages are incredibly helpful.</li><li><strong>Feature Ideas:</strong> Is there something you wish GrabScreen could do? Maybe a different export format, a webcam overlay, or integration with another service? Let us know.</li><li><strong>Privacy Questions:</strong> If our Privacy Policy doesn't answer your question, we're happy to clarify how we handle your data.</li></ul><p style="margin-top: 2rem;">The best way to reach our small team is by email. We read every single one.</p><p style="text-align: center; font-size: 1.2rem; margin: 2rem 0;"><a href="mailto:your-email@example.com">your-email@example.com</a></p>
   </section>
+
+  <!-- Other elements -->
   <dialog id="emailModal">
     <h2><i class="fa-solid fa-envelope"></i> Send Recording</h2>
     <label>To (email): <input id="emailTo" type="email" placeholder="example@domain.com" required /></label>
@@ -91,7 +95,6 @@
   </footer>
 </main>
 
-<!-- PERMANENT FIX: Removed integrity and crossorigin attributes to prevent future blocking -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
 <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
 <script>
