@@ -13,11 +13,13 @@ document.addEventListener("DOMContentLoaded", () => {
       }, 1700);
     });
   };
-  // Simplified fetch wrapper, relies on browser's default cookie handling
   const apiFetch = (url, opts = {}) => fetch(url, opts);
   const fullUrl = (f) => `${location.origin}/recordings/${f}`;
 
   // --- DOM References ---
+  const recorderView = $("#recorderView");
+  const privacyView = $("#privacyView");
+  const contactView = $("#contactView");
   const startBtn = $("#startBtn"), stopBtn = $("#stopBtn");
   const statusMsg = $("#statusMsg"), previewArea = $("#previewArea"), preview = $("#preview");
   const actionsPanel = $("#actionsPanel"), clipPanel = $("#clipPanel"), filesPanel = $("#filesPanel");
@@ -26,7 +28,35 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- State ---
   let mediaRecorder, chunks = [], currentFile = null;
 
+  // --- SPA View Management ---
+  const showView = (viewName) => {
+    recorderView.classList.add("hidden");
+    privacyView.classList.add("hidden");
+    contactView.classList.add("hidden");
+
+    if (viewName === 'recorder') {
+      recorderView.classList.remove("hidden");
+    } else if (viewName === 'privacy') {
+      privacyView.classList.remove("hidden");
+    } else if (viewName === 'contact') {
+      contactView.classList.remove("hidden");
+    }
+  };
+
+  $("#showPrivacyLink").addEventListener("click", (e) => {
+    e.preventDefault();
+    showView('privacy');
+  });
+  $("#showContactLink").addEventListener("click", (e) => {
+    e.preventDefault();
+    showView('contact');
+  });
+  document.querySelectorAll(".back-btn").forEach(btn => {
+    btn.addEventListener("click", () => showView('recorder'));
+  });
+  
   // --- Core Functions ---
+  // (The rest of the JS functions from the previous update are identical)
   const activateFile = (filename) => {
     if (!filename) {
       previewArea.classList.add("hidden");
@@ -37,11 +67,9 @@ document.addEventListener("DOMContentLoaded", () => {
     preview.src = fullUrl(filename);
     previewArea.classList.remove("hidden");
     renderActionsPanel(filename);
-    // Highlight the selected card in the grid
     document.querySelectorAll(".media-card").forEach(card => {
       card.classList.toggle("selected", card.dataset.filename === filename);
     });
-    // Scroll the preview area into view if on a small screen
     previewArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
@@ -61,7 +89,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const card = document.createElement("div");
     card.className = "media-card";
     card.dataset.filename = filename;
-    // Use substring to make the filename in the UI cleaner
     card.innerHTML = `<video src="${fullUrl(filename)}#t=0.1" preload="metadata"></video><p>${filename.substring(10)}</p>`;
     mediaGrid.prepend(card);
     card.addEventListener("click", () => activateFile(filename));
@@ -81,15 +108,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  // --- Initial Load ---
   (async () => {
     try {
       const { files = [] } = await apiFetch("/session/files").then(r => r.json());
-      renderFiles(files.reverse()); // Show newest first
-    } catch { /* Ignore first-visit errors */ }
+      renderFiles(files.reverse());
+    } catch { /* Ignore */ }
   })();
 
-  // --- Event Listeners ---
   startBtn?.addEventListener("click", async () => {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: { mediaSource: "screen" }, audio: true });
@@ -100,10 +125,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const blob = new Blob(chunks, { type: "video/webm" });
         const fd = new FormData();
         fd.append("video", blob, "recording.webm");
-
         statusMsg.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Uploading & processing...`;
         const res = await apiFetch("/upload", { method: "POST", body: fd }).then(r => r.json());
-
         if (res.status === "ok") {
           statusMsg.textContent = `✅ Recording saved!`;
           addFileToGrid(res.filename);
@@ -114,13 +137,12 @@ document.addEventListener("DOMContentLoaded", () => {
         startBtn.disabled = false;
       };
       mediaRecorder.start();
-      // Automatically stop recording if user clicks the browser's native "Stop sharing" button
       stream.getVideoTracks()[0].onended = () => stopBtn.click();
       statusMsg.textContent = "🎬 Recording…";
       startBtn.disabled = true;
       stopBtn.disabled = false;
     } catch (err) {
-      alert("Screen capture permission was denied or is not supported. " + err.message);
+      alert("Screen capture permission was denied. " + err.message);
     }
   });
 
@@ -137,21 +159,18 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   forgetBtn?.addEventListener("click", async () => {
-    if (!confirm("Are you sure you want to forget this session? This will clear your list of recordings from this browser.")) return;
+    if (!confirm("Are you sure? This will clear your list of recordings from this browser.")) return;
     await apiFetch("/session/forget", { method: "POST" });
     renderFiles([]);
     activateFile(null);
     alert("✅ Session forgotten.");
   });
 
-  // Delegated event listener for the dynamic actions panel
   actionsPanel.addEventListener("click", async (e) => {
     const button = e.target.closest("button");
     if (!button) return;
-
     const action = button.dataset.action;
     if (!currentFile) return;
-
     switch (action) {
       case "secure-link": {
         const r = await apiFetch(`/link/secure/${currentFile}`).then(r => r.json());
@@ -166,19 +185,13 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         break;
       }
-      case "email": {
-        $("#emailTo").value = "";
-        $("#emailStatus").textContent = "";
-        $("#emailModal").showModal();
-        break;
-      }
-      case "clip": {
+      case "email": $("#emailModal").showModal(); break;
+      case "clip": 
         clipPanel.classList.remove("hidden");
         clipPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
         break;
-      }
       case "delete": {
-        if (!confirm(`Are you sure you want to permanently delete ${currentFile}? This cannot be undone.`)) return;
+        if (!confirm(`Delete ${currentFile}? This cannot be undone.`)) return;
         const r = await apiFetch(`/delete/${currentFile}`, { method: "POST" }).then(r => r.json());
         if (r.status === "ok") {
           const card = $(`.media-card[data-filename="${currentFile}"]`);
@@ -186,7 +199,7 @@ document.addEventListener("DOMContentLoaded", () => {
             card.classList.add("deleting");
             card.addEventListener("animationend", () => card.remove());
           }
-          activateFile(null); // Hide preview
+          activateFile(null);
         } else {
           alert("❌ Delete failed: " + r.error);
         }
@@ -195,21 +208,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
   
-  // Clip Panel Logic
   $("#clipCancel")?.addEventListener("click", () => clipPanel.classList.add("hidden"));
   $("#clipGo")?.addEventListener("click", async () => {
     const s = +$("#clipStart").value, e = +$("#clipEnd").value;
-    if (!currentFile) return alert("⚠ No recording selected.");
-    if (s >= e) return alert("⚠ Invalid range.");
-
+    if (!currentFile || s >= e) return alert("⚠ Invalid range or no file selected.");
     const btn = $("#clipGo");
     btn.disabled = true;
     btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Cutting...`;
-
     const r = await apiFetch(`/clip/${currentFile}`, {
       method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ start: s, end: e })
     }).then(x => x.json());
-
     if (r.status === "ok") {
       addFileToGrid(r.clip);
       activateFile(r.clip);
@@ -221,27 +229,22 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.innerHTML = `<i class="fa-solid fa-share-nodes"></i> Create & Share Clip`;
   });
 
-  // Email Modal Logic
   $("#emailClose")?.addEventListener("click", () => $("#emailModal").close());
   $("#emailSend")?.addEventListener("click", async () => {
     const to = $("#emailTo").value.trim();
     if (!to) return ($("#emailStatus").textContent = "❌ Enter an e-mail.");
-    
     const btn = $("#emailSend");
     btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Sending...`;
-
     const linkRes = await apiFetch(`/link/secure/${currentFile}`).then(r => r.json());
     if (linkRes.status !== 'ok') {
-        alert('Could not generate a secure link to email.');
+        alert('Could not generate a secure link.');
         btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send`;
         return;
     }
-
     const r = await apiFetch("/send_email", {
       method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ to, url: linkRes.url })
     }).then(x => x.json());
-
-    $("#emailStatus").textContent = r.status === "ok" ? "✅ Sent!" : "❌ " + (r.error || "Failed to send");
+    $("#emailStatus").textContent = r.status === "ok" ? "✅ Sent!" : "❌ " + (r.error || "Failed");
     btn.disabled = false;
     btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send`;
     if (r.status === "ok") setTimeout(() => $("#emailModal").close(), 1500);
