@@ -8,7 +8,6 @@ body.dark {
   --brand: #0d6efd;
   --success: #198754;
   --danger: #dc3545;
-  /* --- NEW --- */
   --warn: #ffc107; 
   --text: #f5f5f5;
   --muted: #aaa;
@@ -23,7 +22,6 @@ body.light {
   --brand: #0d6efd;
   --success: #198754;
   --danger: #dc3545;
-  /* --- NEW --- */
   --warn: #ffc107;
   --text: #212529;
   --muted: #6c757d;
@@ -52,6 +50,14 @@ a { color: var(--brand); text-decoration: none; }
 a:hover { text-decoration: underline; }
 .hidden { display: none !important; }
 
+/* --- SEO Heading Style --- */
+.subheading {
+  font-size: 1.1rem;
+  font-weight: 400;
+  color: var(--muted);
+  margin: -0.5rem 0 1.5rem 0; /* Adjust spacing around the subheading */
+}
+
 /* --- Main Card Layout --- */
 .card {
   background: var(--card);
@@ -75,7 +81,7 @@ a:hover { text-decoration: underline; }
   max-width: 100%;
   object-fit: contain;
   border-radius: 8px;
-  loading: lazy; /* optional - improves SEO on large pages */
+  loading: lazy;
 }
 .theme-toggle {
   position: absolute;
@@ -107,7 +113,6 @@ a:hover { text-decoration: underline; }
 .btn.stop   { background: var(--danger);  color: #fff; }
 .btn.share  { background: var(--brand);   color: #fff; }
 .btn.cancel { background: #6c757d;      color: #fff; }
-/* --- NEW --- */
 .btn.warn { background: var(--warn); color: #000; }
 
 .btn:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-2px); }
@@ -314,7 +319,6 @@ dialog input {
 @media (max-width: 640px) {
   body { padding: 1rem; }
   .card { padding: 4rem 1rem 1.5rem; }
-  /* Make all buttons in a control group take up full width on mobile */
   .recorder-controls .btn, .session-controls .btn { 
     width: 100%; 
     margin: 0.25rem 0;
