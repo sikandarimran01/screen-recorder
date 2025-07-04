@@ -1,7 +1,7 @@
 # app.py (Updated to use .env file)
 
 import os, datetime, subprocess, json, random, string, uuid
-from dotenv import load_dotenv # <-- ADD THIS LINE
+from dotenv import load_dotenv 
 from flask import (
     Flask, render_template, request, jsonify,
     send_from_directory, make_response
@@ -9,7 +9,7 @@ from flask import (
 from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
-load_dotenv() # <-- AND THIS LINE to load variables from .env
+load_dotenv() 
 
 app = Flask(__name__)
 
