@@ -13,20 +13,21 @@ document.addEventListener("DOMContentLoaded", () => {
   const apiFetch = (url, opts = {}) => fetch(url, opts);
   const fullUrl = (f) => `${location.origin}/recordings/${f}`;
   
-  // --- DOM References (Updated) ---
+  // --- DOM References ---
   const recorderView = $("#recorderView"), privacyView = $("#privacyView"), contactView = $("#contactView");
   const startBtn = $("#startBtn"), stopBtn = $("#stopBtn"), pauseBtn = $("#pauseBtn"), resumeBtn = $("#resumeBtn");
   const statusMsg = $("#statusMsg"), previewArea = $("#previewArea"), preview = $("#preview");
   const actionsPanel = $("#actionsPanel"), clipPanel = $("#clipPanel"), filesPanel = $("#filesPanel");
   const mediaGrid = $("#mediaGrid"), sessionBtn = $("#sessionBtn"), forgetBtn = $("#forgetBtn");
   const trimSliderEl = $("#trim-slider"), trimStartTime = $("#trim-start-time"), trimEndTime = $("#trim-end-time");
+  const deleteModal = $("#deleteModal"), fileToDeleteEl = $("#fileToDelete"), deleteConfirmBtn = $("#deleteConfirm"), deleteCancelBtn = $("#deleteCancel");
 
   // --- State ---
   let mediaRecorder, chunks = [], currentFile = null, trimSlider = null;
 
   // --- Time formatting helper ---
   const formatTime = (seconds) => {
-    if (isNaN(seconds) || !isFinite(seconds)) return '00:00.0';
+    if (isNaN(seconds) || !isFinite(seconds)) return '00:00';
     const min = Math.floor(seconds / 60);
     const sec = Math.floor(seconds % 60);
     return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
@@ -40,7 +41,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     currentFile = filename;
-    preview.src = fullUrl(filename);
+    preview.src = fullUrl(filename); 
     previewArea.classList.remove("hidden");
     renderActionsPanel(filename);
     document.querySelectorAll(".media-card").forEach(card => {
@@ -50,7 +51,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   
   const renderActionsPanel = (filename) => {
-    actionsPanel.innerHTML = `<a href="/download/${filename}" class="btn" download><i class="fa-solid fa-download"></i> Download</a><button class="btn" data-action="secure-link"><i class="fa-solid fa-lock"></i> Secure Link</button><button class="btn" data-action="public-link"><i class="fa-solid fa-globe"></i> Public Link</button><button class="btn" data-action="email"><i class="fa-solid fa-envelope"></i> Email</button><button class="btn" data-action="clip"><i class="fa-solid fa-scissors"></i> Trim</button><button class="btn cancel" data-action="delete"><i class="fa-solid fa-trash-can"></i> Delete</button>`;
+    actionsPanel.innerHTML = `<a href="/download/${filename}" class="btn" download><i class="fa-solid fa-download"></i> Download</a><button class="btn" data-action="secure-link"><i class="fa-solid fa-lock"></i> Secure Link</button><button class="btn" data-action="public-link"><i class="fa-solid fa-globe"></i> Public Link</button><button class="btn" data-action="email"><i class="fa-solid fa-envelope"></i> Email</button><button class="btn" data-action="clip"><i class="fa-solid fa-scissors"></i> Trim</button><button class="btn danger" data-action="delete"><i class="fa-solid fa-trash-can"></i> Delete</button>`;
   };
 
   const addFileToGrid = (filename) => {
@@ -69,37 +70,73 @@ document.addEventListener("DOMContentLoaded", () => {
       files.forEach(addFileToGrid);
       sessionBtn.classList.remove("hidden");
       forgetBtn.classList.remove("hidden");
-      // NEW: Show panel by default if files exist
       filesPanel.classList.remove("hidden");
     } else {
       sessionBtn.classList.add("hidden");
       forgetBtn.classList.add("hidden");
     }
   };
-  
-  const setupTrimSlider = () => {
-    const onMetadataLoaded = () => {
-      statusMsg.textContent = "";
-      if (trimSlider) trimSlider.destroy();
-      const videoDuration = preview.duration;
-      const startValues = [0, Math.min(10, videoDuration)];
-      trimSlider = noUiSlider.create(trimSliderEl, { start: startValues, connect: true, range: { 'min': 0, 'max': videoDuration }, step: 0.1 });
-      trimSlider.on('update', (values) => {
-        const [start, end] = values.map(v => parseFloat(v));
-        trimStartTime.textContent = formatTime(start);
-        trimEndTime.textContent = formatTime(end);
-      });
-      trimSlider.on('slide', (values, handle) => { preview.currentTime = parseFloat(values[handle]); });
-    };
 
-    if (!preview.duration || !isFinite(preview.duration)) {
-      statusMsg.textContent = "⏳ Waiting for video metadata...";
-      preview.addEventListener('loadedmetadata', onMetadataLoaded, { once: true });
-    } else {
-      onMetadataLoaded();
-    }
+  // Helper function to prevent code duplication
+  const createSlider = (videoDuration) => {
+    statusMsg.textContent = "";
+    if (trimSlider) { trimSlider.destroy(); }
+
+    const startValues = [0, Math.min(10, videoDuration)];
+    trimSlider = noUiSlider.create(trimSliderEl, {
+      start: startValues,
+      connect: true,
+      range: { min: 0, max: videoDuration },
+      step: 0.1,
+    });
+    trimSlider.on('update', (values) => {
+      const [start, end] = values.map(v => parseFloat(v));
+      trimStartTime.textContent = formatTime(start);
+      trimEndTime.textContent = formatTime(end);
+    });
+    trimSlider.on('slide', (values, handle) => {
+      preview.currentTime = parseFloat(values[handle]);
+    });
     clipPanel.classList.remove("hidden");
     clipPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  // --- DEFINITIVE FIX: Check First, Listen Later ---
+  const setupTrimSlider = () => {
+    statusMsg.textContent = "⏳ Initializing trimmer...";
+    if (trimSlider) { trimSlider.destroy(); trimSlider = null; }
+
+    // Path 1 (SUCCESS): Video metadata is already loaded. Create the slider now.
+    // readyState >= 1 means the video has metadata (including duration).
+    if (preview.readyState >= 1 && isFinite(preview.duration) && preview.duration > 0) {
+      createSlider(preview.duration);
+      return; // We are done.
+    }
+
+    // Path 2 (FALLBACK): Metadata isn't ready. We must wait for the event.
+    statusMsg.textContent = "⏳ Waiting for video metadata...";
+    let fallbackTimeout;
+
+    const onMetadataLoaded = () => {
+      clearTimeout(fallbackTimeout); // We got the event, so cancel the timeout.
+      preview.removeEventListener('loadedmetadata', onMetadataLoaded); // Clean up the listener.
+      
+      // Now that the event has fired, we can be confident the duration is available.
+      if (isFinite(preview.duration) && preview.duration > 0) {
+        createSlider(preview.duration);
+      } else {
+        statusMsg.textContent = "❌ Metadata loaded, but the video duration is invalid.";
+      }
+    };
+    
+    // Attach the event listener.
+    preview.addEventListener('loadedmetadata', onMetadataLoaded);
+
+    // Set a timeout as a safety net in case the event never fires.
+    fallbackTimeout = setTimeout(() => {
+      preview.removeEventListener('loadedmetadata', onMetadataLoaded); // Clean up on timeout too.
+      statusMsg.textContent = "❌ Timed out waiting for video.";
+    }, 5000); // 5 seconds is a generous wait.
   };
   
   // --- Initial Load & Event Listeners ---
@@ -140,8 +177,8 @@ document.addEventListener("DOMContentLoaded", () => {
       stream.getVideoTracks()[0].onended = () => stopBtn.click();
       statusMsg.textContent = "🎬 Recording…";
       startBtn.classList.add("hidden");
-      pauseBtn.classList.remove("hidden");
       stopBtn.classList.remove("hidden");
+      pauseBtn.classList.remove("hidden");
     } catch (err) { alert("Screen capture permission was denied. " + err.message); }
   });
 
@@ -164,6 +201,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Session & Action Panel Controls
   sessionBtn?.addEventListener("click", () => { filesPanel.classList.toggle("hidden"); filesPanel.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
   forgetBtn?.addEventListener("click", async () => { if (!confirm("Are you sure? This will clear your list of recordings from this browser.")) return; await apiFetch("/session/forget", { method: "POST" }); renderFiles([]); activateFile(null); alert("✅ Session forgotten."); });
+  
   actionsPanel.addEventListener("click", async (e) => {
     const button = e.target.closest("button");
     if (!button) return;
@@ -174,12 +212,17 @@ document.addEventListener("DOMContentLoaded", () => {
       case "secure-link": { const r = await apiFetch(`/link/secure/${currentFile}`).then(r => r.json()); if (r.status === "ok") copy(r.url, button); break; }
       case "public-link": { const r = await apiFetch(`/link/public/${currentFile}`).then(r => r.json()); if (r.status === "ok") { copy(r.url, button); button.innerHTML = `<i class="fa-solid fa-link"></i> Public Link Active`; } break; }
       case "email": $("#emailModal").showModal(); break;
-      case "delete": { if (!confirm(`Delete ${currentFile}? This cannot be undone.`)) return; const r = await apiFetch(`/delete/${currentFile}`, { method: "POST" }).then(r => r.json()); if (r.status === "ok") { const card = $(`.media-card[data-filename="${currentFile}"]`); if (card) { card.classList.add("deleting"); card.addEventListener("animationend", () => card.remove()); } activateFile(null); } else { alert("❌ Delete failed: " + r.error); } break; }
+      case "delete": {
+        fileToDeleteEl.textContent = currentFile;
+        deleteConfirmBtn.dataset.filename = currentFile;
+        deleteModal.showModal();
+        break;
+      }
     }
   });
   
-  // Trimmer & Email Modal Controls
-  $("#clipCancel")?.addEventListener("click", () => { clipPanel.classList.add("hidden"); if (trimSlider) { trimSlider.destroy(); trimSlider = null; } preview.removeEventListener('loadedmetadata', setupTrimSlider); statusMsg.textContent = ""; });
+  // --- Modal Controls ---
+  $("#clipCancel")?.addEventListener("click", () => { clipPanel.classList.add("hidden"); if (trimSlider) { trimSlider.destroy(); trimSlider = null; } statusMsg.textContent = ""; });
   $("#clipGo")?.addEventListener("click", async () => {
     if (!currentFile || !trimSlider) return alert("⚠ Trimmer not initialized.");
     const [start, end] = trimSlider.get().map(v => parseFloat(v));
@@ -191,6 +234,35 @@ document.addEventListener("DOMContentLoaded", () => {
     if (r.status === "ok") { addFileToGrid(r.clip); activateFile(r.clip); $("#clipCancel").click(); } else { alert("❌ " + r.error); }
     btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-share-nodes"></i> Create & Share Clip`;
   });
+
   $("#emailClose")?.addEventListener("click", () => $("#emailModal").close());
   $("#emailSend")?.addEventListener("click", async () => { const to = $("#emailTo").value.trim(); if (!to) return ($("#emailStatus").textContent = "❌ Enter an e-mail."); const btn = $("#emailSend"); btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Sending...`; const linkRes = await apiFetch(`/link/secure/${currentFile}`).then(r => r.json()); if (linkRes.status !== 'ok') { alert('Could not generate a secure link.'); btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send`; return; } const r = await apiFetch("/send_email", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ to, url: linkRes.url }) }).then(x => x.json()); $("#emailStatus").textContent = r.status === "ok" ? "✅ Sent!" : "❌ " + (r.error || "Failed"); btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send`; if (r.status === "ok") setTimeout(() => $("#emailModal").close(), 1500); });
+  
+  deleteCancelBtn?.addEventListener("click", () => deleteModal.close());
+  deleteConfirmBtn?.addEventListener("click", async (e) => {
+    const btn = e.target.closest("button");
+    const filename = btn.dataset.filename;
+    if (!filename) return;
+
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Deleting...`;
+
+    const r = await apiFetch(`/delete/${filename}`, { method: "POST" }).then(r => r.json());
+    if (r.status === "ok") {
+      const card = $(`.media-card[data-filename="${filename}"]`);
+      if (card) {
+        card.classList.add("deleting");
+        card.addEventListener("animationend", () => card.remove());
+      }
+      if (currentFile === filename) {
+        activateFile(null);
+      }
+    } else {
+      alert("❌ Delete failed: " + r.error);
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = `<i class="fa-solid fa-trash-can"></i> Yes, Delete`;
+    deleteModal.close();
+  });
 });
