@@ -29,12 +29,11 @@
   <div id="recorderView">
     <h1>🖥️ Online Screen Recorder</h1>
     
-    <!-- MODIFIED: Updated recorder controls for Pause/Resume feature -->
     <div class="recorder-controls">
       <button id="startBtn" class="btn start"><i class="fa-solid fa-circle-play"></i> Start Recording</button>
       <button id="pauseBtn" class="btn warn hidden"><i class="fa-solid fa-pause"></i> Pause</button>
       <button id="resumeBtn" class="btn start hidden"><i class="fa-solid fa-play"></i> Resume</button>
-      <button id="stopBtn" class="btn stop hidden"><i class="fa-solid fa-stop"></i> Stop</button>
+      <button id="stopBtn" class="btn danger hidden"><i class="fa-solid fa-stop"></i> Stop</button>
     </div>
     
     <p id="statusMsg"></p>
@@ -57,7 +56,6 @@
       </div>
     </section>
 
-    <!-- MODIFIED: Button ID changed to avoid conflict -->
     <div class="session-controls">
       <button id="sessionBtn" class="btn hidden"><i class="fa-solid fa-clock-rotate-left"></i> My Recordings</button>
       <button id="forgetBtn" class="btn cancel hidden"><i class="fa-solid fa-user-slash"></i> Forget My Session</button>
@@ -86,6 +84,16 @@
     <button id="emailClose" class="btn cancel" formmethod="dialog">Cancel</button>
     <div id="emailStatus"></div>
   </dialog>
+
+  <!-- NEW: Custom Delete Confirmation Dialog -->
+  <dialog id="deleteModal">
+    <h2><i class="fa-solid fa-triangle-exclamation"></i> Confirm Deletion</h2>
+    <p>Are you sure you want to permanently delete this file? This action cannot be undone.</p>
+    <p><code id="fileToDelete"></code></p>
+    <button id="deleteConfirm" class="btn danger"><i class="fa-solid fa-trash-can"></i> Yes, Delete</button>
+    <button id="deleteCancel" class="btn" formmethod="dialog">Cancel</button>
+  </dialog>
+
   <footer class="site-footer">
     <p>© {{ year }} GrabScreen. All rights reserved.</p>
     <p>
