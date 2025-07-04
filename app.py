@@ -1,16 +1,21 @@
-# app.py (Simplified Version)
+# app.py (Updated to use .env file)
 
+import os, datetime, subprocess, json, random, string, uuid
+from dotenv import load_dotenv # <-- ADD THIS LINE
 from flask import (
     Flask, render_template, request, jsonify,
     send_from_directory, make_response
 )
 from flask_mail import Mail, Message
-import datetime, os, subprocess, json, random, string, uuid
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+
+load_dotenv() # <-- AND THIS LINE to load variables from .env
 
 app = Flask(__name__)
 
-# ... (all your config remains the same) ...
+# --- Configuration ---
+# Your MAIL_USERNAME and MAIL_PASSWORD are now loaded from the .env file
+# before this configuration is set.
 app.config.update(
     MAIL_SERVER="smtp.gmail.com",
     MAIL_PORT=587,
@@ -20,6 +25,8 @@ app.config.update(
     MAIL_DEFAULT_SENDER=("GrabScreen", os.getenv("MAIL_USERNAME")),
 )
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
+
+# --- App Initialization ---
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 TOKEN_EXPIRY_SECONDS = 15 * 60
 mail = Mail(app)
@@ -28,10 +35,14 @@ os.makedirs(RECDIR, exist_ok=True)
 LINKS_FILE = "public_links.json"
 SESSIONS_FILE = "user_sessions.json"
 
+# --- Helper Functions ---
 def load_json(file_path):
     if os.path.exists(file_path):
         with open(file_path, "r") as f:
-            return json.load(f)
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                return {} # Return empty dict if file is corrupt or empty
     return {}
 
 def save_json(data, file_path):
@@ -40,8 +51,6 @@ def save_json(data, file_path):
 
 public_links = load_json(LINKS_FILE)
 user_sessions = load_json(SESSIONS_FILE)
-# ... (all your config remains the same) ...
-
 
 # ─────────────────────────────────────────────────────────
 # Routes
@@ -50,10 +59,6 @@ user_sessions = load_json(SESSIONS_FILE)
 @app.route("/")
 def index():
     return render_template("index.html", year=datetime.datetime.now().year)
-
-# THE /privacy AND /contact ROUTES HAVE BEEN REMOVED.
-# The rest of your app.py routes remain exactly the same.
-# All other routes from /upload to /delete/<filename> are still here.
 
 @app.route("/upload", methods=["POST"])
 def upload():
@@ -87,6 +92,7 @@ def session_files():
     if not token or token not in user_sessions:
         return jsonify({"status": "empty", "files": []})
     
+    # Ensure all files in the session actually exist on disk
     existing_files = [f for f in user_sessions.get(token, []) if os.path.exists(os.path.join(RECDIR, f))]
     if len(existing_files) != len(user_sessions.get(token, [])):
         user_sessions[token] = existing_files
@@ -212,31 +218,54 @@ def serve_public_file(token):
 @app.route("/send_email", methods=["POST"])
 def send_email():
     data = request.get_json()
+    # Check if mail is configured before trying to send
+    if not app.config.get("MAIL_USERNAME") or not app.config.get("MAIL_PASSWORD"):
+        return jsonify({"status": "fail", "error": "Mail service is not configured on the server."}), 503
+
     try:
-        mail.send(Message(
+        msg = Message(
             "GrabScreen recording",
             recipients=[data["to"]],
             body=f"Hi,\n\nHere is your recording:\n{data['url']}\n\nEnjoy!"
-        ))
+        )
+        mail.send(msg)
         return jsonify({"status": "ok"})
     except Exception as e:
-        return jsonify({"status": "fail", "error": str(e)}), 500
+        # Provide a more generic error to the user for security
+        app.logger.error(f"Mail sending failed: {e}")
+        return jsonify({"status": "fail", "error": "Could not send the email."}), 500
 
 @app.route("/debug/files")
 def list_files():
-    return "<br>".join(sorted(os.listdir(RECDIR)))
+    # It's better to check for a specific debug flag than just app.debug
+    if os.getenv("FLASK_ENV") == "development":
+        return "<br>".join(sorted(os.listdir(RECDIR)))
+    return "Not available in production", 404
 
 @app.route("/delete/<filename>", methods=["POST"])
 def delete_file(filename):
+    # Security: Ensure filename is safe and doesn't traverse directories
+    if ".." in filename or filename.startswith("/"):
+        return jsonify({"status": "fail", "error": "Invalid filename"}), 400
+
     file_path = os.path.join(RECDIR, filename)
+    
+    # Security: Verify the final path is still within the intended directory
+    if not os.path.abspath(file_path).startswith(os.path.abspath(RECDIR)):
+        return jsonify({"status": "fail", "error": "Access denied"}), 403
+
     if not os.path.exists(file_path):
         return jsonify({"status": "fail", "error": "File not found"}), 404
     try:
         os.remove(file_path)
+        
+        # Clean up session data
         token = request.cookies.get("magic_token")
         if token and token in user_sessions and filename in user_sessions[token]:
             user_sessions[token].remove(filename)
             save_json(user_sessions, SESSIONS_FILE)
+        
+        # Clean up public links
         global public_links
         public_links = load_json(LINKS_FILE)
         for t, f in list(public_links.items()):
@@ -246,7 +275,9 @@ def delete_file(filename):
 
         return jsonify({"status": "ok", "message": f"{filename} deleted"})
     except Exception as e:
-        return jsonify({"status": "fail", "error": str(e)}), 500
+        app.logger.error(f"File deletion failed: {e}")
+        return jsonify({"status": "fail", "error": "Could not delete the file."}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    # The debug flag should ideally come from an environment variable
+    app.run(debug=(os.getenv("FLASK_ENV") == "development"), port=5001)
