@@ -8,7 +8,6 @@ body.dark {
   --brand: #0d6efd;
   --success: #198754;
   --danger: #dc3545;
-  /* --- NEW --- */
   --warn: #ffc107; 
   --text: #f5f5f5;
   --muted: #aaa;
@@ -23,7 +22,6 @@ body.light {
   --brand: #0d6efd;
   --success: #198754;
   --danger: #dc3545;
-  /* --- NEW --- */
   --warn: #ffc107;
   --text: #212529;
   --muted: #6c757d;
@@ -100,10 +98,10 @@ a:hover { text-decoration: underline; }
 .btn i { line-height: 1; }
 
 .btn.start  { background: var(--success); color: #fff; }
-.btn.stop   { background: var(--danger);  color: #fff; }
+/* MODIFIED: Changed .stop to .danger for reusability */
+.btn.danger { background: var(--danger);  color: #fff; }
 .btn.share  { background: var(--brand);   color: #fff; }
 .btn.cancel { background: #6c757d;      color: #fff; }
-/* --- NEW --- */
 .btn.warn { background: var(--warn); color: #000; }
 
 .btn:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-2px); }
@@ -163,6 +161,18 @@ dialog input {
   font-size: 1rem;
 }
 #emailStatus { margin-top: 0.75rem; font-size: 0.9rem; }
+
+/* NEW: Style for the filename in the delete modal */
+#deleteModal code {
+  background: var(--input-bg);
+  padding: 0.2rem 0.5rem;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  color: var(--muted);
+  word-break: break-all;
+  display: inline-block;
+  margin-top: 0.5rem;
+}
 
 /* --- Interactive Media Grid --- */
 #filesPanel {
