@@ -139,58 +139,7 @@ a:hover { text-decoration: underline; }
 }
 body.light #actionsPanel { background: #f8f9fa; }
 
-/* +++ NEW: Dropdown Menu Styles +++ */
-.dropdown {
-  position: relative;
-  display: inline-block;
-}
-.dropdown-menu {
-  display: none;
-  position: absolute;
-  background-color: var(--card);
-  min-width: 240px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-  z-index: 100;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  padding: 0.5rem 0;
-  margin-top: 0.25rem;
-  text-align: left;
-}
-.dropdown:hover .dropdown-menu {
-  display: block;
-}
-.dropdown-item {
-  color: var(--text);
-  padding: 0.75rem 1.25rem;
-  text-decoration: none;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  font-size: 0.9rem;
-}
-.dropdown-item:hover {
-  background-color: var(--card-highlight-bg);
-  text-decoration: none;
-}
-.dropdown-divider {
-  height: 1px;
-  margin: .5rem 0;
-  overflow: hidden;
-  background-color: var(--border);
-}
-.dropdown-status {
-  padding: 0.75rem 1.25rem;
-  font-size: 0.9rem;
-  color: var(--muted);
-}
-.dropdown-item.success {
-  color: var(--success);
-  font-weight: bold;
-}
-/* End Dropdown */
-
-/* --- Feature Highlights & How-It-Works Styles --- */
+/* +++ START: NEW Feature Highlights & How-It-Works Styles +++ */
 .feature-highlights {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -222,6 +171,7 @@ body.light #actionsPanel { background: #f8f9fa; }
   line-height: 1.5;
   margin: 0;
 }
+
 .how-it-works {
   margin: 2.5rem 0;
   padding-top: 2rem;
@@ -260,6 +210,8 @@ body.light #actionsPanel { background: #f8f9fa; }
   line-height: 1.5;
   margin: 0;
 }
+/* +++ END: NEW Styles +++ */
+
 
 /* --- Panels & Dialogs --- */
 .panel, dialog {
@@ -376,7 +328,7 @@ dialog input {
 .panel-header h2 { margin: 0; font-size: 1.25rem; }
 .btn-close {
   background: none; border: none; font-size: 2rem;
-  font-weight: 300; color: var(--muted); cursor: pointer; line-height: 1;
+  font-weight: 300; color: var(--muted); cursor: pointer; line--height: 1;
 }
 .trim-slider-wrapper {
   display: flex; align-items: center; gap: 1rem; margin: 1rem 0;
@@ -420,7 +372,7 @@ dialog input {
   .back-btn { width: auto; }
 }
 
-/* --- Attractive Contact Form Modal Styles --- */
+/* --- NEW: Attractive Contact Form Modal Styles --- */
 dialog textarea {
   width: 100%;
   border: 1px solid var(--border);
