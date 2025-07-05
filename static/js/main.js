@@ -165,7 +165,18 @@ document.addEventListener("DOMContentLoaded", () => {
       stopBtn.classList.remove("hidden");
       pauseBtn.classList.remove("hidden");
     } catch (err) {
-      alert("Screen capture permission was denied. " + err.message);
+      // --- NEW: DYNAMIC ERROR HANDLING ---
+      if (err.name === 'NotAllowedError') {
+        statusMsg.textContent = "🤔 Recording cancelled. Ready when you are!";
+      } else {
+        statusMsg.textContent = "❌ Could not start recording. Please try again.";
+        console.error("An unexpected error occurred when starting recording:", err);
+      }
+      
+      // Clear the message after 5 seconds
+      setTimeout(() => {
+        statusMsg.textContent = "";
+      }, 5000);
     }
   });
 
@@ -264,7 +275,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const contactStatus = $("#contactStatus");
 
   showContactModalBtn?.addEventListener("click", () => {
-    // Clear previous status and styles when opening
     contactStatus.textContent = "";
     contactStatus.className = ""; 
     contactModal?.showModal();
@@ -280,7 +290,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const message = $("#contactMessage").value.trim();
 
     if (!from_email || !subject || !message) {
-      // Apply the .error class
       contactStatus.className = "error";
       contactStatus.textContent = "❌ Please fill out all fields.";
       return;
@@ -288,7 +297,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     contactSendBtn.disabled = true;
     contactSendBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Sending...`;
-    contactStatus.className = ""; // Clear old errors
+    contactStatus.className = "";
     contactStatus.textContent = "";
 
     const res = await apiFetch("/contact_us", {
@@ -298,7 +307,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }).then(r => r.json());
 
     if (res.status === "ok") {
-      // Apply the .success class
       contactStatus.className = "success";
       contactStatus.textContent = "✅ Message Sent! We'll get back to you soon.";
       setTimeout(() => {
@@ -308,7 +316,6 @@ document.addEventListener("DOMContentLoaded", () => {
         $("#contactMessage").value = "";
       }, 2500);
     } else {
-      // Apply the .error class
       contactStatus.className = "error";
       contactStatus.textContent = `❌ ${res.error || "An unknown error occurred."}`;
     }
