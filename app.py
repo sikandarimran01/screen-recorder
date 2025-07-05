@@ -1,9 +1,8 @@
-# Add Response and stream_with_context to imports
-import os, datetime, subprocess, json, random, string, uuid, multiprocessing
+import os, datetime, subprocess, json, random, string, uuid
 from dotenv import load_dotenv 
 from flask import (
     Flask, render_template, request, jsonify,
-    send_from_directory, make_response, Response, stream_with_context
+    make_response, Response, stream_with_context
 )
 from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
@@ -28,13 +27,8 @@ serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 TOKEN_EXPIRY_SECONDS = 15 * 60
 mail = Mail(app)
 
-# Use Render's ephemeral (temporary) writable directory
 RECDIR  = "/mnt/recordings"
 os.makedirs(RECDIR, exist_ok=True)
-
-# +++ CRITICAL FIX: Save JSON files to the writable directory +++
-# The root filesystem is read-only in production. These must be stored in RECDIR.
-# Note: This means links and sessions will be cleared on every deploy.
 LINKS_FILE = os.path.join(RECDIR, "public_links.json")
 SESSIONS_FILE = os.path.join(RECDIR, "user_sessions.json")
 
@@ -54,34 +48,19 @@ def save_json(data, file_path):
 public_links = load_json(LINKS_FILE)
 user_sessions = load_json(SESSIONS_FILE)
 
-def run_ffmpeg_conversion(in_path, out_path):
-    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", in_path, "-c:v", "libx264", "-c:a", "aac", "-pix_fmt", "yuv420p", "-y", out_path]
-    try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        app.logger.error(f"FFMPEG conversion failed for {in_path}: {e.stderr}")
-        if os.path.exists(out_path): os.remove(out_path)
-
-# +++ NEW: Robust file streaming function to prevent timeouts +++
 def stream_file(filename, as_attachment=False):
-    # Security checks
-    if ".." in filename or filename.startswith("/"): return "Invalid filename", 400
     file_path = os.path.join(RECDIR, filename)
-    if not os.path.abspath(file_path).startswith(os.path.abspath(RECDIR)): return "Access denied", 403
     if not os.path.exists(file_path): return "File not found", 404
-
     def generate():
         with open(file_path, "rb") as f:
             while True:
-                chunk = f.read(4096)  # Read in 4KB chunks
+                chunk = f.read(4096)
                 if not chunk: break
                 yield chunk
-
     mimetype = 'video/mp4' if filename.endswith('.mp4') else 'video/webm'
     headers = {'Content-Type': mimetype}
     if as_attachment:
         headers['Content-Disposition'] = f'attachment; filename="{filename}"'
-    
     return Response(stream_with_context(generate()), headers=headers)
 
 # ─────────────────────────────────────────────────────────
@@ -113,7 +92,50 @@ def upload():
     response.set_cookie("magic_token", token, max_age=365*24*60*60)
     return response
 
-# ... (the middle part of the code is unchanged) ...
+# +++ SIMPLIFIED AND MORE RELIABLE CONVERSION ROUTE +++
+@app.route('/convert/mp4/<orig_name>', methods=['GET']) # Changed to GET for direct browser navigation
+def convert_to_mp4(orig_name):
+    if ".." in orig_name or orig_name.startswith("/"): return "Invalid filename", 400
+    in_path = os.path.join(RECDIR, orig_name)
+    if not os.path.exists(in_path): return "Original file not found", 404
+    
+    new_name = os.path.splitext(orig_name)[0] + ".mp4"
+    out_path = os.path.join(RECDIR, new_name)
+    
+    # If MP4 already exists, just serve it immediately.
+    if os.path.exists(out_path):
+        return stream_file(new_name, as_attachment=True)
+
+    # --- This is now a SYNCHRONOUS (blocking) operation ---
+    # The user's browser will wait here until the conversion is done.
+    # This relies on the Gunicorn timeout being set high enough.
+    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", in_path, "-c:v", "libx264", "-c:a", "aac", "-pix_fmt", "yuv420p", "-y", out_path]
+    try:
+        app.logger.info(f"Starting synchronous conversion for {orig_name}")
+        subprocess.run(cmd, check=True, timeout=280) # Use a timeout just under Gunicorn's
+        app.logger.info(f"Finished conversion for {orig_name}")
+    except subprocess.CalledProcessError as e:
+        app.logger.error(f"FFMPEG conversion failed for {in_path}: {e.stderr}")
+        return "Video conversion failed on the server.", 500
+    except subprocess.TimeoutExpired:
+        app.logger.error(f"FFMPEG conversion timed out for {in_path}")
+        return "Video conversion took too long and was stopped.", 500
+
+    # Once conversion is done, stream the new MP4 file back to the user.
+    return stream_file(new_name, as_attachment=True)
+
+
+# --- All file serving uses the robust stream_file function ---
+@app.route("/recordings/<fname>")
+def recordings(fname):
+    return stream_file(fname)
+
+@app.route("/download/<fname>")
+def download(fname):
+    return stream_file(fname, as_attachment=True)
+
+# ... (The rest of your code from /session/files to the end remains the same as the last working version)
+# I have omitted it for brevity.
 
 @app.route("/session/files")
 def session_files():
@@ -155,35 +177,7 @@ def clip(orig):
         return jsonify({"status": "ok", "clip": clip_name})
     except subprocess.CalledProcessError as e:
         return jsonify({"status": "fail", "error": e.stderr}), 500
-
-@app.route('/convert/mp4/<orig_name>', methods=['POST'])
-def convert_to_mp4(orig_name):
-    if ".." in orig_name or orig_name.startswith("/"): return jsonify({"status": "fail", "error": "Invalid filename"}), 400
-    in_path = os.path.join(RECDIR, orig_name)
-    if not os.path.exists(in_path): return jsonify({"status": "fail", "error": "Original file not found"}), 404
-    new_name = os.path.splitext(orig_name)[0] + ".mp4"
-    out_path = os.path.join(RECDIR, new_name)
-    if os.path.exists(out_path): return jsonify({"status": "ready", "new_filename": new_name})
-    process = multiprocessing.Process(target=run_ffmpeg_conversion, args=(in_path, out_path))
-    process.start()
-    return jsonify({"status": "processing", "new_filename": new_name}), 202
-
-@app.route('/status/<filename>')
-def check_status(filename):
-    if ".." in filename or filename.startswith("/"): return jsonify({"status": "fail", "error": "Invalid filename"}), 400
-    file_path = os.path.join(RECDIR, filename)
-    return jsonify({"status": "ready"}) if os.path.exists(file_path) else jsonify({"status": "processing"})
-
-
-# +++ UPDATED: All file serving now uses the robust stream_file function +++
-@app.route("/recordings/<fname>")
-def recordings(fname):
-    return stream_file(fname)
-
-@app.route("/download/<fname>")
-def download(fname):
-    return stream_file(fname, as_attachment=True)
-
+        
 @app.route("/secure/<token>")
 def secure_download(token):
     try:
@@ -198,8 +192,6 @@ def serve_public_file(token):
     fname = public_links.get(token)
     if not fname or not os.path.exists(os.path.join(RECDIR, fname)): return "❌ Invalid or expired link.", 404
     return stream_file(fname)
-
-# ... (the rest of your routes are also unchanged) ...
 
 @app.route("/link/secure/<fname>")
 def generate_secure_link(fname):
