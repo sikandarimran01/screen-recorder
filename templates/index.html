@@ -52,40 +52,27 @@
 
   <div id="recorderView">
     <h1>🖥️ Online Screen Recorder</h1>
-
-    <!-- START: New Dynamic Content Block -->
-    <div class="intro-content">
-      <p class="sub-headline">
-        Your free, private, in-browser tool to capture and share screen recordings in seconds.
-      </p>
-
-      <ul class="feature-list">
-        <li><span class="icon-wrapper"><i class="fa-solid fa-bolt"></i></span> Instant & Free</li>
-        <li><span class="icon-wrapper"><i class="fa-solid fa-user-secret"></i></span> Private & Secure</li>
-        <li><span class="icon-wrapper"><i class="fa-solid fa-scissors"></i></span> Trim & Edit</li>
-        <li><span class="icon-wrapper"><i class="fa-solid fa-share-nodes"></i></span> Share Instantly</li>
-      </ul>
-
-      <div class="how-it-works">
-        <div class="step">
-          <div class="step-number">1</div>
-          <h3>Click to Record</h3>
-          <p>Press the 'Start Recording' button and select the screen, window, or tab you want to capture.</p>
-        </div>
-        <div class="step">
-          <div class="step-number">2</div>
-          <h3>Stop & Edit</h3>
-          <p>Stop the recording at any time. Your video appears instantly, ready to be trimmed or clipped.</p>
-        </div>
-        <div class="step">
-          <div class="step-number">3</div>
-          <h3>Share or Download</h3>
-          <p>Generate a secure link, send an email, or download the file directly to your computer. No sign-up required.</p>
-        </div>
+    
+    <!-- +++ START: NEW DYNAMIC CONTENT +++ -->
+    <div class="feature-highlights">
+      <div class="feature-card">
+        <i class="fa-solid fa-bolt"></i>
+        <h3>Instant & Free</h3>
+        <p>No downloads, no signup. Just click a button and start recording your screen immediately. 100% free.</p>
+      </div>
+      <div class="feature-card">
+        <i class="fa-solid fa-shield-halved"></i>
+        <h3>Private & Secure</h3>
+        <p>Your recordings are tied to your browser session. You have full control to delete them forever at any time.</p>
+      </div>
+      <div class="feature-card">
+        <i class="fa-solid fa-scissors"></i>
+        <h3>Trim & Share</h3>
+        <p>Quickly trim your recordings to perfection and share with a secure, public, or email link in one click.</p>
       </div>
     </div>
-    <!-- END: New Dynamic Content Block -->
-    
+    <!-- +++ END: NEW DYNAMIC CONTENT +++ -->
+
     <div class="recorder-controls">
       <button id="startBtn" class="btn start"><i class="fa-solid fa-circle-play"></i> Start Recording</button>
       <button id="pauseBtn" class="btn warn hidden"><i class="fa-solid fa-pause"></i> Pause</button>
@@ -94,6 +81,30 @@
     </div>
     
     <p id="statusMsg"></p>
+
+    <!-- +++ START: NEW HOW-IT-WORKS SECTION +++ -->
+    <section class="how-it-works">
+      <h2>How It Works in 3 Simple Steps</h2>
+      <div class="how-it-works-grid">
+        <div class="step">
+          <div class="step-number">1</div>
+          <h3>Click & Record</h3>
+          <p>Hit "Start Recording", choose the screen, window, or tab you want to capture, and you're live.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <h3>Stop & Edit</h3>
+          <p>When you're done, stop the recording. Your video appears instantly, ready for trimming or downloading.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <h3>Share Securely</h3>
+          <p>Generate a temporary secure link, a permanent public link, or email your video directly.</p>
+        </div>
+      </div>
+    </section>
+    <!-- +++ END: NEW HOW-IT-WORKS SECTION +++ -->
+
     <div id="previewArea" class="hidden">
       <video id="preview" controls></video>
       <div id="actionsPanel"></div>
