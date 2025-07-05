@@ -193,6 +193,14 @@ def download_mp4(filename):
         try:
             result = subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True)
             app.logger.info(f"✅ FFmpeg output for {filename}:\n{result.stdout}")
+                        # ✅ Check for empty MP4 file
+            if os.path.getsize(mp4_path) == 0:
+                app.logger.error(f"❌ Converted MP4 is 0 bytes: {mp4_path}")
+                return jsonify({
+                    "status": "fail",
+                    "error": "Converted video is empty. Try re-uploading or trimming the recording."
+                }), 500
+
         except subprocess.CalledProcessError as e:
             app.logger.error(f"❌ FFmpeg conversion failed for {filename}:\n{e.stderr}")
             return jsonify({
