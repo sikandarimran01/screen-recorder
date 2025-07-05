@@ -12,8 +12,6 @@ load_dotenv()
 app = Flask(__name__)
 
 # --- Configuration ---
-# Your MAIL_USERNAME and MAIL_PASSWORD are now loaded from the .env file
-# before this configuration is set.
 app.config.update(
     MAIL_SERVER="smtp.gmail.com",
     MAIL_PORT=587,
@@ -29,7 +27,11 @@ serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 TOKEN_EXPIRY_SECONDS = 15 * 60
 mail = Mail(app)
 RECDIR  = "/mnt/recordings"
+MP4_DIR = os.path.join(RECDIR, "mp4_converted") # New directory for MP4s
+
 os.makedirs(RECDIR, exist_ok=True)
+os.makedirs(MP4_DIR, exist_ok=True) # Ensure MP4 directory exists
+
 LINKS_FILE = "public_links.json"
 SESSIONS_FILE = "user_sessions.json"
 
@@ -148,11 +150,53 @@ def clip(orig):
 
 @app.route("/recordings/<fname>")
 def recordings(fname):
+    # This serves WEBM files for preview and default download
     return send_from_directory(RECDIR, fname)
 
 @app.route("/download/<fname>")
 def download(fname):
+    # This is the default WEBM download
     return send_from_directory(RECDIR, fname, as_attachment=True)
+
+# NEW ROUTE: Download as MP4
+@app.route("/download/mp4/<filename>")
+def download_mp4(filename):
+    if not filename.endswith(".webm"):
+        return jsonify({"status": "fail", "error": "Invalid file type. Only .webm allowed for conversion input."}), 400
+
+    webm_path = os.path.join(RECDIR, filename)
+    if not os.path.exists(webm_path):
+        return jsonify({"status": "fail", "error": "Original WEBM file not found"}), 404
+
+    mp4_filename = filename.replace(".webm", ".mp4")
+    mp4_path = os.path.join(MP4_DIR, mp4_filename)
+
+    # Check if MP4 already exists
+    if not os.path.exists(mp4_path):
+        # Convert using ffmpeg
+        ffmpeg_cmd = [
+            "ffmpeg",
+            "-y",                 # Overwrite output file without asking
+            "-i", webm_path,      # Input WEBM file
+            "-c:v", "libx264",    # H.264 video codec
+            "-preset", "fast",    # Conversion speed/quality trade-off
+            "-crf", "23",         # Constant Rate Factor (quality setting, 0-51, lower is better)
+            "-c:a", "aac",        # AAC audio codec
+            "-b:a", "128k",       # Audio bitrate
+            mp4_path,             # Output MP4 file
+        ]
+        try:
+            subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            app.logger.error(f"FFmpeg conversion failed for {filename}: {e.stderr}")
+            return jsonify({"status": "fail", "error": f"Video conversion failed: {e.stderr}"}), 500
+        except Exception as e:
+            app.logger.error(f"Error during conversion for {filename}: {e}")
+            return jsonify({"status": "fail", "error": f"An unexpected error occurred during conversion: {str(e)}"}), 500
+    
+    # Send the MP4 file for download
+    return send_from_directory(MP4_DIR, mp4_filename, as_attachment=True)
+
 
 @app.route("/link/secure/<fname>")
 def generate_secure_link(fname):
@@ -237,7 +281,10 @@ def send_email():
 def list_files():
     # It's better to check for a specific debug flag than just app.debug
     if os.getenv("FLASK_ENV") == "development":
-        return "<br>".join(sorted(os.listdir(RECDIR)))
+        webm_files = sorted(os.listdir(RECDIR))
+        mp4_files = sorted(os.listdir(MP4_DIR))
+        return f"<h2>WEBM Files ({RECDIR}):</h2><pre>{'<br>'.join(webm_files)}</pre>" \
+               f"<h2>MP4 Files ({MP4_DIR}):</h2><pre>{'<br>'.join(mp4_files)}</pre>"
     return "Not available in production", 404
 
 @app.route("/delete/<filename>", methods=["POST"])
@@ -247,6 +294,7 @@ def delete_file(filename):
         return jsonify({"status": "fail", "error": "Invalid filename"}), 400
 
     file_path = os.path.join(RECDIR, filename)
+    mp4_file_path = os.path.join(MP4_DIR, filename.replace(".webm", ".mp4"))
     
     # Security: Verify the final path is still within the intended directory
     if not os.path.abspath(file_path).startswith(os.path.abspath(RECDIR)):
@@ -256,7 +304,11 @@ def delete_file(filename):
         return jsonify({"status": "fail", "error": "File not found"}), 404
     try:
         os.remove(file_path)
-        
+        # Attempt to remove corresponding MP4 file if it exists
+        if os.path.exists(mp4_file_path):
+            os.remove(mp4_file_path)
+            app.logger.info(f"Deleted corresponding MP4 file: {mp4_file_path}")
+
         # Clean up session data
         token = request.cookies.get("magic_token")
         if token and token in user_sessions and filename in user_sessions[token]:
@@ -308,4 +360,4 @@ def contact_us():
 
 if __name__ == "__main__":
     # The debug flag should ideally come from an environment variable
-    app.run(debug=(os.getenv("FLASK_ENV") == "development"), port=5001) 
+    app.run(debug=(os.getenv("FLASK_ENV") == "development"), port=5001)
