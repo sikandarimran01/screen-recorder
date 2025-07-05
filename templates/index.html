@@ -24,14 +24,22 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
 
   <!-- NEW: Structured Data (JSON-LD) for Site Logo -->
-  <script type="application/ld+json">
+<script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "Organization",
-    "url": "{{ request.url_root }}",
-    "logo": "{{ url_for('static', filename='logo.png', _external=True) }}"
+    "@type": "WebSite",
+    "name": "GrabScreen",
+    "url": "{{ request.url_root.rstrip('/') }}",
+    "publisher": {
+      "@type": "Organization",
+      "name": "GrabScreen",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "{{ url_for('static', filename='logo.png', _external=True) }}"
+      }
+    }
   }
-  </script>
+</script>
 
 </head>
 
