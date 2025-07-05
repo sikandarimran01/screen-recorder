@@ -13,6 +13,42 @@ document.addEventListener("DOMContentLoaded", () => {
   const apiFetch = (url, opts = {}) => fetch(url, opts);
   const fullUrl = (f) => `${location.origin}/recordings/${f}`;
   
+  // ===================================================================
+  // --- NEW: More Robust Mobile Device Detection ---
+  // This is the updated code to reliably detect mobile/tablet devices.
+  // ===================================================================
+  const checkForMobile = () => {
+    // This function uses a modern approach first and a fallback for older browsers.
+    const isMobile = (() => {
+      // The `userAgentData` property is a modern, reliable way to check for mobile.
+      if (navigator.userAgentData) {
+        return navigator.userAgentData.mobile;
+      }
+      // Fallback for older browsers that don't support userAgentData.
+      return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    })();
+
+    if (isMobile) {
+      const mobileModal = $("#mobileWarningModal");
+      const mobileCloseBtn = $("#mobileWarningClose");
+      const startBtn = $("#startBtn");
+
+      if (mobileModal && startBtn) {
+        // Show the warning modal
+        mobileModal.showModal();
+        mobileCloseBtn?.addEventListener('click', () => mobileModal.close());
+
+        // Disable the primary record button and change its text for clarity
+        startBtn.disabled = true;
+        startBtn.innerHTML = `<i class="fa-solid fa-desktop"></i> Desktop Only`;
+      }
+    }
+  };
+
+  // Run the check as soon as the page loads
+  checkForMobile();
+  // --- END of NEW CODE ---
+
   // --- DOM References ---
   const recorderView = $("#recorderView"), privacyView = $("#privacyView"), contactView = $("#contactView");
   const startBtn = $("#startBtn"), stopBtn = $("#stopBtn"), pauseBtn = $("#pauseBtn"), resumeBtn = $("#resumeBtn");
