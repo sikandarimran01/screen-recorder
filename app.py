@@ -1,5 +1,3 @@
-# app.py
-
 import os, datetime, subprocess, json, random, string, uuid
 from dotenv import load_dotenv 
 from flask import (
@@ -14,6 +12,8 @@ load_dotenv()
 app = Flask(__name__)
 
 # --- Configuration ---
+# Your MAIL_USERNAME and MAIL_PASSWORD are now loaded from the .env file
+# before this configuration is set.
 app.config.update(
     MAIL_SERVER="smtp.gmail.com",
     MAIL_PORT=587,
@@ -153,47 +153,6 @@ def recordings(fname):
 @app.route("/download/<fname>")
 def download(fname):
     return send_from_directory(RECDIR, fname, as_attachment=True)
-
-# NEW ROUTE: Convert to MP4
-@app.route("/convert_to_mp4/<orig_filename>")
-def convert_to_mp4(orig_filename):
-    in_path = os.path.join(RECDIR, orig_filename)
-    if not os.path.exists(in_path):
-        return jsonify({"status": "fail", "error": "Original file not found"}), 404
-
-    # Generate a new unique name for the MP4 file
-    # Using the original base name and appending _mp4 before the extension
-    base_name, _ = os.path.splitext(orig_filename)
-    mp4_filename = f"{base_name}_mp4.mp4" # Example: recording_20240501_120000.webm -> recording_20240501_120000_mp4.mp4
-    out_path = os.path.join(RECDIR, mp4_filename)
-
-    # Check if MP4 already exists to avoid re-conversion
-    if os.path.exists(out_path):
-        return jsonify({"status": "ok", "mp4_filename": mp4_filename, "message": "File already converted."})
-
-    # ffmpeg command for webm to mp4 conversion
-    # Using h.264 for video and aac for audio
-    cmd = [
-        "ffmpeg", "-hide_banner", "-loglevel", "error",
-        "-i", in_path,
-        "-c:v", "libx264", # H.264 video codec
-        "-preset", "medium", # Encoding speed vs. compression ratio (e.g., ultrafast, superfast, medium, slow, slower)
-        "-crf", "23",       # Constant Rate Factor (quality scale, 0-51, lower is better quality)
-        "-c:a", "aac",     # AAC audio codec
-        "-b:a", "128k",     # Audio bitrate
-        "-y", out_path      # Overwrite output file if it exists
-    ]
-
-    try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
-        return jsonify({"status": "ok", "mp4_filename": mp4_filename})
-    except subprocess.CalledProcessError as e:
-        app.logger.error(f"FFmpeg conversion failed: {e.stderr}")
-        return jsonify({"status": "fail", "error": f"Conversion failed: {e.stderr}"}), 500
-    except Exception as e:
-        app.logger.error(f"Error during MP4 conversion: {e}")
-        return jsonify({"status": "fail", "error": "An internal error occurred during conversion."}), 500
-
 
 @app.route("/link/secure/<fname>")
 def generate_secure_link(fname):
@@ -349,4 +308,4 @@ def contact_us():
 
 if __name__ == "__main__":
     # The debug flag should ideally come from an environment variable
-    app.run(debug=(os.getenv("FLASK_ENV") == "development"), port=5001)
+    app.run(debug=(os.getenv("FLASK_ENV") == "development"), port=5001) 
