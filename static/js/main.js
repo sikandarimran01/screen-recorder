@@ -1,5 +1,3 @@
-// static/js/main.js
-
 document.addEventListener("DOMContentLoaded", () => {
   // --- DOM Query Helpers ---
   const $ = (s) => document.querySelector(s);
@@ -81,16 +79,7 @@ document.addEventListener("DOMContentLoaded", () => {
     currentFile = filename;
     preview.src = fullUrl(filename); 
     previewArea.classList.remove("hidden");
-    // MODIFIED: Changed "Download" to "Download WEBM" and added "Download MP4" button
-    actionsPanel.innerHTML = `
-      <a href="/download/${filename}" class="btn" download><i class="fa-solid fa-download"></i> Download WEBM</a>
-      <button class="btn" data-action="download-mp4"><i class="fa-solid fa-file-video"></i> Download MP4</button>
-      <button class="btn" data-action="secure-link"><i class="fa-solid fa-lock"></i> Secure Link</button>
-      <button class="btn" data-action="public-link"><i class="fa-solid fa-globe"></i> Public Link</button>
-      <button class="btn" data-action="email"><i class="fa-solid fa-envelope"></i> Email</button>
-      <button class="btn" data-action="clip"><i class="fa-solid fa-scissors"></i> Trim</button>
-      <button class="btn danger" data-action="delete"><i class="fa-solid fa-trash-can"></i> Delete</button>
-    `;
+    actionsPanel.innerHTML = `<a href="/download/${filename}" class="btn" download><i class="fa-solid fa-download"></i> Download</a><button class="btn" data-action="secure-link"><i class="fa-solid fa-lock"></i> Secure Link</button><button class="btn" data-action="public-link"><i class="fa-solid fa-globe"></i> Public Link</button><button class="btn" data-action="email"><i class="fa-solid fa-envelope"></i> Email</button><button class="btn" data-action="clip"><i class="fa-solid fa-scissors"></i> Trim</button><button class="btn danger" data-action="delete"><i class="fa-solid fa-trash-can"></i> Delete</button>`;
     $$(".media-card").forEach(card => card.classList.toggle("selected", card.dataset.filename === filename));
     previewArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
@@ -207,51 +196,8 @@ document.addEventListener("DOMContentLoaded", () => {
     switch (action) {
       case "clip": setupTrimSlider(); break;
       case "secure-link": { const r = await apiFetch(`/link/secure/${currentFile}`).then(r => r.json()); if (r.status === "ok") copy(r.url, button); break; }
-      case "public-link": { 
-        const r = await apiFetch(`/link/public/${currentFile}`).then(r => r.json()); 
-        if (r.status === "ok") { 
-          copy(r.url, button); 
-          // Only change button text if it's a new link created
-          if (r.isNew) { 
-            button.innerHTML = `<i class="fa-solid fa-link"></i> Public Link Active`; 
-          }
-        } 
-        break; 
-      }
+      case "public-link": { const r = await apiFetch(`/link/public/${currentFile}`).then(r => r.json()); if (r.status === "ok") { copy(r.url, button); button.innerHTML = `<i class="fa-solid fa-link"></i> Public Link Active`; } break; }
       case "email": emailModal?.showModal(); break;
-      // NEW CASE: Handle MP4 Download
-      case "download-mp4": {
-          const origFilename = currentFile;
-          const mp4Button = button; // Reference the clicked button
-          
-          mp4Button.disabled = true;
-          mp4Button.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Converting...`;
-          statusMsg.textContent = "⏳ Converting to MP4, this may take a moment...";
-
-          try {
-              const res = await apiFetch(`/convert_to_mp4/${origFilename}`).then(r => r.json());
-              if (res.status === "ok" && res.mp4_filename) {
-                  // Trigger download for the MP4 file
-                  const downloadLink = document.createElement('a');
-                  downloadLink.href = `/download/${res.mp4_filename}`;
-                  downloadLink.download = res.mp4_filename; // Suggest filename for download
-                  document.body.appendChild(downloadLink);
-                  downloadLink.click();
-                  document.body.removeChild(downloadLink);
-                  statusMsg.textContent = `✅ MP4 conversion complete and download initiated!`;
-              } else {
-                  statusMsg.textContent = `❌ MP4 conversion failed: ${res.error || 'Unknown error'}`;
-              }
-          } catch (error) {
-              statusMsg.textContent = `❌ An error occurred during MP4 conversion.`;
-              console.error("MP4 conversion fetch error:", error);
-          } finally {
-              mp4Button.disabled = false;
-              mp4Button.innerHTML = `<i class="fa-solid fa-file-video"></i> Download MP4`;
-              setTimeout(() => { statusMsg.textContent = ""; }, 4000); // Clear message after 4 seconds
-          }
-          break;
-      }
       case "delete":
         fileToDeleteEl.textContent = currentFile;
         deleteConfirmBtn.dataset.filename = currentFile;
