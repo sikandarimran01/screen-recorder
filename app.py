@@ -1,4 +1,3 @@
-
 import os, datetime, subprocess, json, random, string, uuid
 from dotenv import load_dotenv 
 from flask import (
@@ -276,6 +275,36 @@ def delete_file(filename):
     except Exception as e:
         app.logger.error(f"File deletion failed: {e}")
         return jsonify({"status": "fail", "error": "Could not delete the file."}), 500
+
+# NEW ROUTE FOR CONTACT FORM
+@app.route("/contact_us", methods=["POST"])
+def contact_us():
+    # Ensure mail is configured before trying to send
+    if not app.config.get("MAIL_USERNAME") or not app.config.get("MAIL_PASSWORD"):
+        return jsonify({"status": "fail", "error": "Mail service is not configured on the server."}), 503
+
+    data = request.get_json()
+    from_email = data.get("from_email")
+    subject = data.get("subject")
+    message_body = data.get("message")
+
+    if not all([from_email, subject, message_body]):
+        return jsonify({"status": "fail", "error": "Please fill out all fields."}), 400
+
+    try:
+        # Note: The email is sent TO your configured mail username.
+        msg = Message(
+            subject=f"[GrabScreen Contact] {subject}",
+            recipients=[app.config["MAIL_USERNAME"]], # Sends the email to yourself
+            body=f"You have a new message from: {from_email}\n\n---\n\n{message_body}",
+            reply_to=from_email # This lets you click "Reply" in your inbox to reply to the user
+        )
+        mail.send(msg)
+        return jsonify({"status": "ok", "message": "Your message has been sent!"})
+    except Exception as e:
+        app.logger.error(f"Contact form mail sending failed: {e}")
+        return jsonify({"status": "fail", "error": "Sorry, an error occurred and the message could not be sent."}), 500
+
 
 if __name__ == "__main__":
     # The debug flag should ideally come from an environment variable
