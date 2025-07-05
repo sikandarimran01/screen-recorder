@@ -13,6 +13,16 @@ document.addEventListener("DOMContentLoaded", () => {
       setTimeout(() => { btn.innerHTML = prevHTML; btn.disabled = false; }, 1700);
     });
   };
+  // Helper to trigger file download from an API response (where backend sends file)
+  const downloadFile = (url, filename) => {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename; // Suggests a filename for the download
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   const apiFetch = (url, opts = {}) => fetch(url, opts);
   const fullUrl = (f) => `${location.origin}/recordings/${f}`;
   
@@ -73,13 +83,24 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!filename) {
       currentFile = null;
       previewArea.classList.add("hidden");
-      actionsPanel.innerHTML = "";
+      actionsPanel.innerHTML = ""; // Clear existing buttons
       return;
     }
     currentFile = filename;
     preview.src = fullUrl(filename); 
     previewArea.classList.remove("hidden");
-    actionsPanel.innerHTML = `<a href="/download/${filename}" class="btn" download><i class="fa-solid fa-download"></i> Download</a><button class="btn" data-action="secure-link"><i class="fa-solid fa-lock"></i> Secure Link</button><button class="btn" data-action="public-link"><i class="fa-solid fa-globe"></i> Public Link</button><button class="btn" data-action="email"><i class="fa-solid fa-envelope"></i> Email</button><button class="btn" data-action="clip"><i class="fa-solid fa-scissors"></i> Trim</button><button class="btn danger" data-action="delete"><i class="fa-solid fa-trash-can"></i> Delete</button>`;
+    
+    // Re-render the actions panel with the correct href for download-webm
+    actionsPanel.innerHTML = `
+      <a href="/download/${filename}" class="btn" data-action="download-webm" download><i class="fa-solid fa-download"></i> Download WEBM</a>
+      <button class="btn" data-action="download-mp4"><i class="fa-solid fa-file-video"></i> Download MP4</button>
+      <button class="btn" data-action="secure-link"><i class="fa-solid fa-lock"></i> Secure Link</button>
+      <button class="btn" data-action="public-link"><i class="fa-solid fa-globe"></i> Public Link</button>
+      <button class="btn" data-action="email"><i class="fa-solid fa-envelope"></i> Email</button>
+      <button class="btn" data-action="clip"><i class="fa-solid fa-scissors"></i> Trim</button>
+      <button class="btn danger" data-action="delete"><i class="fa-solid fa-trash-can"></i> Delete</button>
+    `;
+    
     $$(".media-card").forEach(card => card.classList.toggle("selected", card.dataset.filename === filename));
     previewArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
@@ -189,12 +210,48 @@ document.addEventListener("DOMContentLoaded", () => {
   forgetBtn?.addEventListener("click", () => forgetSessionModal?.showModal());
 
   actionsPanel.addEventListener("click", async (e) => {
-    const button = e.target.closest("button[data-action]");
+    const button = e.target.closest("button[data-action]") || e.target.closest("a[data-action]");
     if (!button || !currentFile) return;
     const action = button.dataset.action;
     
     switch (action) {
       case "clip": setupTrimSlider(); break;
+      case "download-webm":
+          // This action is handled by the <a> tag's default download attribute.
+          // No explicit JS needed here, but the data-action is useful for consistency.
+          break;
+      case "download-mp4":
+          const originalButtonText = button.innerHTML;
+          button.disabled = true;
+          button.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Converting...`;
+          statusMsg.textContent = "⏳ Converting to MP4. This might take a moment...";
+
+          try {
+              // We're essentially making a request that will trigger a file download.
+              // fetch() is not ideal for binary downloads when you want to trigger a save dialog.
+              // Instead, we'll just redirect the browser to the download URL.
+              const mp4Filename = currentFile.replace('.webm', '.mp4');
+              const downloadUrl = `/download/mp4/${currentFile}`;
+              
+              // Simulate a click on an invisible link to trigger download, 
+              // as the server directly sends the file, not JSON.
+              const tempLink = document.createElement('a');
+              tempLink.href = downloadUrl;
+              tempLink.download = mp4Filename; // Suggest the filename
+              document.body.appendChild(tempLink);
+              tempLink.click();
+              document.body.removeChild(tempLink);
+
+              statusMsg.textContent = `✅ MP4 conversion started! Check your downloads.`;
+          } catch (error) {
+              console.error("MP4 conversion request failed:", error);
+              statusMsg.textContent = `❌ MP4 conversion failed. Try again.`;
+          } finally {
+              button.disabled = false;
+              button.innerHTML = originalButtonText;
+              setTimeout(() => statusMsg.textContent = '', 5000); // Clear message
+          }
+          break;
       case "secure-link": { const r = await apiFetch(`/link/secure/${currentFile}`).then(r => r.json()); if (r.status === "ok") copy(r.url, button); break; }
       case "public-link": { const r = await apiFetch(`/link/public/${currentFile}`).then(r => r.json()); if (r.status === "ok") { copy(r.url, button); button.innerHTML = `<i class="fa-solid fa-link"></i> Public Link Active`; } break; }
       case "email": emailModal?.showModal(); break;
