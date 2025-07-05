@@ -316,6 +316,15 @@ dialog input {
 .fade-in { animation: fadeIn 0.5s ease both; }
 @keyframes fadeOut { to { opacity: 0; transform: scale(0.9); } }
 
+/* NEW: Specific styling for the mobile warning modal content */
+#mobileWarningModal p {
+  margin: 1rem 0;
+  line-height: 1.6;
+}
+#mobileWarningModal strong {
+  color: var(--brand);
+}
+
 /* --- Responsive Adjustments --- */
 @media (max-width: 640px) {
   body { padding: 1rem; }
