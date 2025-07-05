@@ -308,4 +308,4 @@ def contact_us():
 
 if __name__ == "__main__":
     # The debug flag should ideally come from an environment variable
-    app.run(debug=(os.getenv("FLASK_ENV") == "development"), port=5001)
+    app.run(debug=(os.getenv("FLASK_ENV") == "development"), port=5001) 
