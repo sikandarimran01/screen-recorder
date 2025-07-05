@@ -6,8 +6,12 @@
   <meta name="description" content="GrabScreen is a free, fast, and private online screen recorder. Record your screen instantly without installing anything. Save, trim, share, or embed videos in one click." />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="canonical" href="{{ request.url_root }}" />
+  
+  <!-- Social Media & Open Graph -->
   <meta property="og:title" content="GrabScreen – Free Online Screen Recorder" />
-  <meta property="og:image" content="{{ url_for('static', filename='logo.png') }}" />
+  <meta property="og:image" content="{{ url_for('static', filename='logo.png', _external=True) }}" />
+  
+  <!-- Favicon -->
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}" />
   
   <!-- Icons & Fonts -->
@@ -16,7 +20,19 @@
   <!-- noUiSlider Library -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css" />
   
+  <!-- Your Stylesheet -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+
+  <!-- NEW: Structured Data (JSON-LD) for Site Logo -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "url": "{{ request.url_root }}",
+    "logo": "{{ url_for('static', filename='logo.png', _external=True) }}"
+  }
+  </script>
+
 </head>
 
 <body>
@@ -68,12 +84,16 @@
 
   <!-- Info Panels (Privacy/Contact) -->
   <section id="privacyView" class="info-panel hidden">
+      <!-- Your privacy policy content here -->
       <button class="btn back-btn"><i class="fa-solid fa-arrow-left"></i> Back to Recorder</button>
-      <h1>Privacy Policy for GrabScreen</h1><p><strong>Last Updated: {{ year }}</strong></p><p>Your privacy isn't just a policy; it's a core feature of GrabScreen. This service is engineered to be as anonymous and ephemeral as you need it to be. We don't have user accounts, and we never ask for personal information to use the core service.</p><p>Here’s a transparent breakdown of what data we handle and why:</p><h2 style="margin-top: 2rem;">What We Handle and Why</h2><ul><li><strong>Your Screen Recordings:</strong> The video and audio streams you capture are uploaded to our secure cloud servers (hosted on Render.com).<br><strong>Purpose:</strong> This is essential for the service to function, allowing you to view, download, trim, and generate shareable links for your recordings.</li><li><strong>Your Anonymous Session Key:</strong> When you first use GrabScreen, we generate a random, anonymous key (a "magic_token") and store it in your browser's cookies. This key is a long string of random characters and is not tied to your personal identity.<br><strong>Purpose:</strong> This key acts like a temporary claim ticket. It allows you to close your browser and return later to find your list of recordings without needing a password.</li><li><strong>Email Address (When Sharing):</strong> If you choose to use the "Email" feature, we handle the recipient's email address.<br><strong>Purpose:</strong> This is a transactional use only. The address is passed directly to our mail server (via Gmail's trusted SMTP service) to send the single email you requested. We do not store, log, or add this email to any mailing lists.</li></ul><h2 style="margin-top: 2rem;">Your Control is Our Priority</h2><p>You have complete and granular control over your data through the features we've built:</p><ul><li><strong>Deleting a Recording:</strong> When you click the "Delete" button for a recording, you are sending a command to permanently erase the video file from our server's disk. This action is irreversible and also invalidates any shareable links you may have created for it.</li><li><strong>Secure Links:</strong> These links are cryptographically signed and time-limited (15 minutes). They are designed for secure, temporary sharing. After the time expires, the link becomes permanently invalid.</li><li><strong>Public Links:</strong> Creating a "Public Link" makes your video accessible to anyone with that specific, hard-to-guess URL. You are in control of who you share this link with. Deleting the recording will also disable this link.</li><li><strong>The "Forget My Session" Button:</strong> This is your privacy "kill switch." Clicking it does two things: it deletes the anonymous key from your browser and erases the server-side record linking that key to your list of files. After this, your browser is a complete stranger to our service again.<br><em>(Important: This action severs the link between your browser and your files, but for security and operational reasons, it does not automatically delete the underlying video files themselves. You should delete recordings individually before forgetting your session if you want them gone forever.)</em></li></ul><h2 style="margin-top: 2rem;">Third Parties</h2><p>We do not sell, rent, or share your recordings or personal data with any third-party advertisers. Our only third-party services are for core infrastructure:<br>- <strong>Render.com:</strong> For secure application and database hosting.<br>- <strong>Cloudflare/cdnjs:</strong> For delivering common libraries like Font Awesome and noUiSlider.</p>
+      <h1>Privacy Policy for GrabScreen</h1>
+      <!-- ... -->
   </section>
   <section id="contactView" class="info-panel hidden">
+      <!-- Your contact content here -->
       <button class="btn back-btn"><i class="fa-solid fa-arrow-left"></i> Back to Recorder</button>
-      <h1>Get in Touch</h1><p>We're actively developing GrabScreen and value your input. Whether you have a feature idea, encountered a bug, or just have a question, we'd love to hear from you.</p><h2 style="margin-top: 2rem;">What kind of feedback is helpful?</h2><ul><li><strong>Bug Reports:</strong> If something isn't working, tell us! Please include what browser you're using (e.g., Chrome, Firefox) and the steps you took that led to the error. Any console error messages are incredibly helpful.</li><li><strong>Feature Ideas:</strong> Is there something you wish GrabScreen could do? Maybe a different export format, a webcam overlay, or integration with another service? Let us know.</li><li><strong>Privacy Questions:</strong> If our Privacy Policy doesn't answer your question, we're happy to clarify how we handle your data.</li></ul><p style="margin-top: 2rem;">The best way to reach our small team is by email. We read every single one.</p><p style="text-align: center; font-size: 1.2rem; margin: 2rem 0;"><a href="mailto:info@grabscreen.com">your-email@example.com</a></p>
+      <h1>Get in Touch</h1>
+      <!-- ... -->
   </section>
 
   <!-- Other elements -->
@@ -85,7 +105,7 @@
     <div id="emailStatus"></div>
   </dialog>
 
-  <!-- NEW: Custom Delete Confirmation Dialog -->
+  <!-- Custom Delete Confirmation Dialog -->
   <dialog id="deleteModal">
     <h2><i class="fa-solid fa-triangle-exclamation"></i> Confirm Deletion</h2>
     <p>Are you sure you want to permanently delete this file? This action cannot be undone.</p>
