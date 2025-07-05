@@ -26,8 +26,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const deleteModal = $("#deleteModal"), fileToDeleteEl = $("#fileToDelete"), deleteConfirmBtn = $("#deleteConfirm"), deleteCancelBtn = $("#deleteCancel");
   const emailModal = $("#emailModal"), forgetSessionModal = $("#forgetSessionModal");
   
-  // --- App State ---
-  let mediaRecorder, chunks = [], currentFile = null, trimSlider = null, pollInterval = null;
+  // --- App State (Simplified: removed pollInterval) ---
+  let mediaRecorder, chunks = [], currentFile = null, trimSlider = null;
 
   // ===================================================================
   // CORE FUNCTIONS
@@ -70,7 +70,9 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   
   const activateFile = (filename) => {
-    if (pollInterval) clearInterval(pollInterval); // Stop any active polling
+    // Stop any active polling from previous implementations if it exists
+    if (window.pollInterval) clearInterval(window.pollInterval); 
+    
     if (!filename) {
       currentFile = null;
       previewArea.classList.add("hidden");
@@ -80,14 +82,15 @@ document.addEventListener("DOMContentLoaded", () => {
     currentFile = filename;
     preview.src = fullUrl(filename); 
     previewArea.classList.remove("hidden");
-    // +++ UPDATED: Actions panel now includes a dropdown for downloads +++
+    
+    // Actions panel with simplified "Convert to .mp4" link
     actionsPanel.innerHTML = `
       <div class="dropdown">
         <button class="btn"><i class="fa-solid fa-download"></i> Download</button>
         <div class="dropdown-menu">
           <a href="/download/${filename}" class="dropdown-item" download><i class="fa-solid fa-file-video"></i> Download .webm (Instant)</a>
           <div class="dropdown-divider"></div>
-          <a href="#" class="dropdown-item" data-action="convert-mp4"><i class="fa-solid fa-film"></i> Convert to .mp4</a>
+          <a href="/convert/mp4/${filename}" class="dropdown-item" data-action="convert-mp4"><i class="fa-solid fa-film"></i> Convert to .mp4</a>
           <div id="mp4-status" class="dropdown-status"></div>
         </div>
       </div>
@@ -145,12 +148,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // EVENT LISTENERS
   // ===================================================================
 
-  // --- Main Page Navigation (Isolated and Correct) ---
   $("#showPrivacyLink")?.addEventListener("click", (e) => { e.preventDefault(); showView('privacy'); });
   $("#showContactLink")?.addEventListener("click", (e) => { e.preventDefault(); showView('contact'); });
   $$(".back-btn").forEach(btn => btn.addEventListener("click", (e) => { e.preventDefault(); showView('recorder'); }));
 
-  // --- Recorder Controls ---
   startBtn?.addEventListener("click", async () => {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: { mediaSource: "screen" }, audio: true });
@@ -170,24 +171,15 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
           statusMsg.textContent = "❌ Upload failed: " + res.error;
         }
-        startBtn.classList.remove("hidden");
-        pauseBtn.classList.add("hidden");
-        resumeBtn.classList.add("hidden");
-        stopBtn.classList.add("hidden");
+        startBtn.classList.remove("hidden"); pauseBtn.classList.add("hidden"); resumeBtn.classList.add("hidden"); stopBtn.classList.add("hidden");
       };
       mediaRecorder.start();
       stream.getVideoTracks()[0].onended = () => stopBtn.click();
       statusMsg.textContent = "🎬 Recording…";
-      startBtn.classList.add("hidden");
-      stopBtn.classList.remove("hidden");
-      pauseBtn.classList.remove("hidden");
+      startBtn.classList.add("hidden"); stopBtn.classList.remove("hidden"); pauseBtn.classList.remove("hidden");
     } catch (err) {
-      if (err.name === 'NotAllowedError') {
-        statusMsg.textContent = "🤔 Recording cancelled. Ready when you are!";
-      } else {
-        statusMsg.textContent = "❌ Could not start recording. Please try again.";
-        console.error("An unexpected error occurred when starting recording:", err);
-      }
+      if (err.name === 'NotAllowedError') { statusMsg.textContent = "🤔 Recording cancelled. Ready when you are!"; } 
+      else { statusMsg.textContent = "❌ Could not start recording. Please try again."; console.error("An unexpected error occurred when starting recording:", err); }
       setTimeout(() => { statusMsg.textContent = ""; }, 5000);
     }
   });
@@ -199,13 +191,18 @@ document.addEventListener("DOMContentLoaded", () => {
   sessionBtn?.addEventListener("click", () => { filesPanel.classList.toggle("hidden"); filesPanel.scrollIntoView({ behavior: 'smooth' }); });
   forgetBtn?.addEventListener("click", () => forgetSessionModal?.showModal());
 
-  // +++ UPDATED: actionsPanel listener now handles dropdown clicks +++
+  // +++ SIMPLIFIED: actionsPanel listener +++
   actionsPanel.addEventListener("click", async (e) => {
     const target = e.target.closest("[data-action]");
     if (!target || !currentFile) return;
-    e.preventDefault();
+    
     const action = target.dataset.action;
     
+    // Prevent default link behavior for JS-handled actions
+    if (action !== 'convert-mp4') {
+        e.preventDefault();
+    }
+
     switch (action) {
       case "clip": setupTrimSlider(); break;
       case "secure-link": { const r = await apiFetch(`/link/secure/${currentFile}`).then(r => r.json()); if (r.status === "ok") copy(r.url, target); break; }
@@ -217,47 +214,20 @@ document.addEventListener("DOMContentLoaded", () => {
         deleteModal?.showModal();
         break;
       case "convert-mp4": {
+        // We no longer prevent the default browser navigation for this link.
+        // Instead, we just show a waiting message.
         const mp4StatusDiv = $("#mp4-status");
-        mp4StatusDiv.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Converting...`;
-        
-        const res = await apiFetch(`/convert/mp4/${currentFile}`, { method: 'POST' }).then(r => r.json());
-
-        if (res.status === "processing") {
-          pollForFile(res.new_filename, mp4StatusDiv);
-        } else if (res.status === "ready") {
-          updateMp4Link(res.new_filename, mp4StatusDiv);
-        } else {
-          mp4StatusDiv.innerHTML = `❌ Error`;
+        if(mp4StatusDiv) {
+            mp4StatusDiv.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Converting... Please wait.`;
         }
+        // The browser will now navigate to the href of the link,
+        // and the server will handle the download.
         break;
       }
     }
   });
 
-  // +++ NEW: Function to update the MP4 link +++
-  const updateMp4Link = (newFilename, statusDiv) => {
-    if (pollInterval) clearInterval(pollInterval);
-    statusDiv.innerHTML = `<a href="/download/${newFilename}" class="dropdown-item success" download><i class="fa-solid fa-circle-check"></i> Download .mp4</a>`;
-  };
-
-  // +++ NEW: Function to poll for the converted file +++
-  const pollForFile = (newFilename, statusDiv) => {
-    if (pollInterval) clearInterval(pollInterval); // Clear any previous timer
-    let attempts = 0;
-    const maxAttempts = 120; // Poll every 2s for 4 minutes max
-
-    pollInterval = setInterval(async () => {
-      attempts++;
-      const res = await apiFetch(`/status/${newFilename}`).then(r => r.json());
-      if (res.status === "ready") {
-        clearInterval(pollInterval);
-        updateMp4Link(newFilename, statusDiv);
-      } else if (attempts > maxAttempts) {
-        clearInterval(pollInterval);
-        statusDiv.innerHTML = `❌ Conversion timed out.`;
-      }
-    }, 2000);
-  };
+  // --- Functions pollForFile and updateMp4Link have been REMOVED ---
 
   // --- Modal Button Listeners ---
   $("#clipCancel")?.addEventListener("click", () => { clipPanel.classList.add("hidden"); if (trimSlider) { trimSlider.destroy(); trimSlider = null; } statusMsg.textContent = ""; });
@@ -279,10 +249,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const btn = e.target.closest("button");
       btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Sending...`;
       const linkRes = await apiFetch(`/link/secure/${currentFile}`).then(r => r.json());
-      if (linkRes.status !== 'ok') {
-          alert('Could not generate a secure link.');
-          btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send`; return;
-      }
+      if (linkRes.status !== 'ok') { alert('Could not generate a secure link.'); btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send`; return; }
       const r = await apiFetch("/send_email", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ to, url: linkRes.url }) }).then(x => x.json());
       $("#emailStatus").textContent = r.status === "ok" ? "✅ Sent!" : "❌ " + (r.error || "Failed");
       btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send`;
@@ -299,13 +266,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (r.status === "ok") {
         statusMsg.textContent = `✅ Recording deleted successfully.`;
         setTimeout(() => { statusMsg.textContent = ""; }, 4000);
-        
         const card = $(`.media-card[data-filename="${filename}"]`);
         if (card) { card.classList.add("deleting"); card.addEventListener("animationend", () => card.remove()); }
         if (currentFile === filename) activateFile(null);
-      } else {
-        alert("❌ Delete failed: " + r.error);
-      }
+      } else { alert("❌ Delete failed: " + r.error); }
       btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-trash-can"></i> Yes, Delete`;
       deleteModal.close();
   });
@@ -323,7 +287,6 @@ document.addEventListener("DOMContentLoaded", () => {
       btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-eraser"></i> Yes, Forget Session`;
   });
 
-  // --- Contact Form Modal Logic ---
   const contactModal = $("#contactModal");
   $("#showContactModalBtn")?.addEventListener("click", () => { $("#contactStatus").textContent = ""; $("#contactStatus").className = ""; contactModal?.showModal(); });
   $("#contactCancelBtn")?.addEventListener("click", () => { contactModal?.close(); });
