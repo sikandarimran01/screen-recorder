@@ -2,7 +2,7 @@ import os, datetime, subprocess, json, random, string, uuid
 from dotenv import load_dotenv 
 from flask import (
     Flask, render_template, request, jsonify,
-    make_response, Response, stream_with_context
+    send_from_directory, make_response
 )
 from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
@@ -12,6 +12,8 @@ load_dotenv()
 app = Flask(__name__)
 
 # --- Configuration ---
+# Your MAIL_USERNAME and MAIL_PASSWORD are now loaded from the .env file
+# before this configuration is set.
 app.config.update(
     MAIL_SERVER="smtp.gmail.com",
     MAIL_PORT=587,
@@ -26,19 +28,19 @@ app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 TOKEN_EXPIRY_SECONDS = 15 * 60
 mail = Mail(app)
-
 RECDIR  = "/mnt/recordings"
 os.makedirs(RECDIR, exist_ok=True)
-LINKS_FILE = os.path.join(RECDIR, "public_links.json")
-SESSIONS_FILE = os.path.join(RECDIR, "user_sessions.json")
-
+LINKS_FILE = "public_links.json"
+SESSIONS_FILE = "user_sessions.json"
 
 # --- Helper Functions ---
 def load_json(file_path):
     if os.path.exists(file_path):
         with open(file_path, "r") as f:
-            try: return json.load(f)
-            except json.JSONDecodeError: return {}
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                return {} # Return empty dict if file is corrupt or empty
     return {}
 
 def save_json(data, file_path):
@@ -47,21 +49,6 @@ def save_json(data, file_path):
 
 public_links = load_json(LINKS_FILE)
 user_sessions = load_json(SESSIONS_FILE)
-
-def stream_file(filename, as_attachment=False):
-    file_path = os.path.join(RECDIR, filename)
-    if not os.path.exists(file_path): return "File not found", 404
-    def generate():
-        with open(file_path, "rb") as f:
-            while True:
-                chunk = f.read(4096)
-                if not chunk: break
-                yield chunk
-    mimetype = 'video/mp4' if filename.endswith('.mp4') else 'video/webm'
-    headers = {'Content-Type': mimetype}
-    if as_attachment:
-        headers['Content-Disposition'] = f'attachment; filename="{filename}"'
-    return Response(stream_with_context(generate()), headers=headers)
 
 # ─────────────────────────────────────────────────────────
 # Routes
@@ -74,77 +61,41 @@ def index():
 @app.route("/upload", methods=["POST"])
 def upload():
     video_file = request.files.get("video")
-    if not video_file: return jsonify({"status": "fail", "error": "No file"}), 400
+    if not video_file:
+        return jsonify({"status": "fail", "error": "No file"}), 400
+
     fname = datetime.datetime.now().strftime("recording_%Y%m%d_%H%M%S.webm")
     save_path = os.path.join(RECDIR, fname)
+
     try:
         video_file.save(save_path)
     except Exception as e:
-        app.logger.error(f"Upload failed: {e}", exc_info=True)
-        return jsonify({"status": "fail", "error": "Server error during upload."}), 500
+        return jsonify({"status": "fail", "error": str(e)}), 500
+
     token = request.cookies.get("magic_token")
     if not token or token not in user_sessions:
         token = uuid.uuid4().hex[:16]
         user_sessions[token] = []
+
     user_sessions[token].append(fname)
     save_json(user_sessions, SESSIONS_FILE)
+
     response = jsonify({"status": "ok", "filename": fname})
     response.set_cookie("magic_token", token, max_age=365*24*60*60)
     return response
 
-# +++ SIMPLIFIED AND MORE RELIABLE CONVERSION ROUTE +++
-@app.route('/convert/mp4/<orig_name>', methods=['GET']) # Changed to GET for direct browser navigation
-def convert_to_mp4(orig_name):
-    if ".." in orig_name or orig_name.startswith("/"): return "Invalid filename", 400
-    in_path = os.path.join(RECDIR, orig_name)
-    if not os.path.exists(in_path): return "Original file not found", 404
-    
-    new_name = os.path.splitext(orig_name)[0] + ".mp4"
-    out_path = os.path.join(RECDIR, new_name)
-    
-    # If MP4 already exists, just serve it immediately.
-    if os.path.exists(out_path):
-        return stream_file(new_name, as_attachment=True)
-
-    # --- This is now a SYNCHRONOUS (blocking) operation ---
-    # The user's browser will wait here until the conversion is done.
-    # This relies on the Gunicorn timeout being set high enough.
-    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", in_path, "-c:v", "libx264", "-c:a", "aac", "-pix_fmt", "yuv420p", "-y", out_path]
-    try:
-        app.logger.info(f"Starting synchronous conversion for {orig_name}")
-        subprocess.run(cmd, check=True, timeout=280) # Use a timeout just under Gunicorn's
-        app.logger.info(f"Finished conversion for {orig_name}")
-    except subprocess.CalledProcessError as e:
-        app.logger.error(f"FFMPEG conversion failed for {in_path}: {e.stderr}")
-        return "Video conversion failed on the server.", 500
-    except subprocess.TimeoutExpired:
-        app.logger.error(f"FFMPEG conversion timed out for {in_path}")
-        return "Video conversion took too long and was stopped.", 500
-
-    # Once conversion is done, stream the new MP4 file back to the user.
-    return stream_file(new_name, as_attachment=True)
-
-
-# --- All file serving uses the robust stream_file function ---
-@app.route("/recordings/<fname>")
-def recordings(fname):
-    return stream_file(fname)
-
-@app.route("/download/<fname>")
-def download(fname):
-    return stream_file(fname, as_attachment=True)
-
-# ... (The rest of your code from /session/files to the end remains the same as the last working version)
-# I have omitted it for brevity.
-
 @app.route("/session/files")
 def session_files():
     token = request.cookies.get("magic_token")
-    if not token or token not in user_sessions: return jsonify({"status": "empty", "files": []})
+    if not token or token not in user_sessions:
+        return jsonify({"status": "empty", "files": []})
+    
+    # Ensure all files in the session actually exist on disk
     existing_files = [f for f in user_sessions.get(token, []) if os.path.exists(os.path.join(RECDIR, f))]
     if len(existing_files) != len(user_sessions.get(token, [])):
         user_sessions[token] = existing_files
         save_json(user_sessions, SESSIONS_FILE)
+
     return jsonify({"status": "ok", "files": existing_files})
 
 @app.route("/session/forget", methods=["POST"])
@@ -159,15 +110,32 @@ def forget_session():
 
 @app.route("/clip/<orig>", methods=["POST"])
 def clip(orig):
-    data = request.get_json(force=True)
-    start, end = float(data["start"]), float(data["end"])
-    if start >= end: return jsonify({"status": "fail", "error": "Start time must be less than end time"}), 400
+    try:
+        data = request.get_json(force=True)
+        start = float(data["start"])
+        end = float(data["end"])
+    except Exception as e:
+        return jsonify({"status": "fail", "error": f"Invalid JSON: {str(e)}"}), 400
+
+    if start >= end:
+        return jsonify({"status": "fail", "error": "Start time must be less than end time"}), 400
+
     in_path = os.path.join(RECDIR, orig)
-    if not os.path.exists(in_path): return jsonify({"status": "fail", "error": "Original file not found"}), 404
+    if not os.path.exists(in_path):
+        return jsonify({"status": "fail", "error": "Original file not found"}), 404
+
     clip_name = datetime.datetime.now().strftime("clip_%Y%m%d_%H%M%S.webm")
     out_path = os.path.join(RECDIR, clip_name)
     duration = end - start
-    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-ss", str(start), "-t", str(duration), "-i", in_path, "-c:v", "libvpx-vp9", "-b:v", "1M", "-c:a", "libopus", "-b:a", "128k", "-y", out_path]
+
+    cmd = [
+        "ffmpeg", "-hide_banner", "-loglevel", "error",
+        "-ss", str(start), "-t", str(duration), "-i", in_path,
+        "-c:v", "libvpx-vp9", "-b:v", "1M",
+        "-c:a", "libopus", "-b:a", "128k",
+        "-y", out_path
+    ]
+
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
         token = request.cookies.get("magic_token")
@@ -177,36 +145,46 @@ def clip(orig):
         return jsonify({"status": "ok", "clip": clip_name})
     except subprocess.CalledProcessError as e:
         return jsonify({"status": "fail", "error": e.stderr}), 500
-        
+
+@app.route("/recordings/<fname>")
+def recordings(fname):
+    return send_from_directory(RECDIR, fname)
+
+@app.route("/download/<fname>")
+def download(fname):
+    return send_from_directory(RECDIR, fname, as_attachment=True)
+
+@app.route("/link/secure/<fname>")
+def generate_secure_link(fname):
+    if not os.path.exists(os.path.join(RECDIR, fname)):
+        return jsonify({"status": "fail", "error": "file not found"}), 404
+
+    token = serializer.dumps(fname)
+    url = request.url_root.rstrip("/") + "/secure/" + token
+    return jsonify({"status": "ok", "url": url})
+
 @app.route("/secure/<token>")
 def secure_download(token):
     try:
         fname = serializer.loads(token, max_age=TOKEN_EXPIRY_SECONDS)
-    except SignatureExpired: return "⏳ Link expired.", 410
-    except BadSignature: return "❌ Invalid link.", 400
-    return stream_file(fname)
-
-@app.route("/public/<token>")
-def serve_public_file(token):
-    public_links = load_json(LINKS_FILE)
-    fname = public_links.get(token)
-    if not fname or not os.path.exists(os.path.join(RECDIR, fname)): return "❌ Invalid or expired link.", 404
-    return stream_file(fname)
-
-@app.route("/link/secure/<fname>")
-def generate_secure_link(fname):
-    if not os.path.exists(os.path.join(RECDIR, fname)): return jsonify({"status": "fail", "error": "file not found"}), 404
-    token = serializer.dumps(fname)
-    url = request.url_root.rstrip("/") + "/secure/" + token
-    return jsonify({"status": "ok", "url": url})
+    except SignatureExpired:
+        return "⏳ Link expired.", 410
+    except BadSignature:
+        return "❌ Invalid link.", 400
+    return send_from_directory(RECDIR, fname)
 
 @app.route("/link/public/<fname>", methods=["GET"])
 def get_or_create_public_link(fname):
     global public_links
     public_links = load_json(LINKS_FILE)
-    if not os.path.exists(os.path.join(RECDIR, fname)): return jsonify({"status": "fail", "error": "File not found"}), 404
+    if not os.path.exists(os.path.join(RECDIR, fname)):
+        return jsonify({"status": "fail", "error": "File not found"}), 404
+
     for token, f in public_links.items():
-        if f == fname: return jsonify({"status": "ok", "url": request.url_root.rstrip("/") + "/public/" + token, "isNew": False})
+        if f == fname:
+            url = request.url_root.rstrip("/") + "/public/" + token
+            return jsonify({"status": "ok", "url": url, "isNew": False})
+
     token = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
     public_links[token] = fname
     save_json(public_links, LINKS_FILE)
@@ -218,66 +196,116 @@ def delete_public_link(fname):
     public_links = load_json(LINKS_FILE)
     removed = False
     for token, f in list(public_links.items()):
-        if f == fname: del public_links[token]; removed = True
+        if f == fname:
+            del public_links[token]
+            removed = True
     if removed:
         save_json(public_links, LINKS_FILE)
         return jsonify({"status": "ok", "message": "Link removed"})
     return jsonify({"status": "fail", "error": "No public link found"}), 404
 
+@app.route("/public/<token>")
+def serve_public_file(token):
+    public_links = load_json(LINKS_FILE)
+    fname = public_links.get(token)
+    if not fname or not os.path.exists(os.path.join(RECDIR, fname)):
+        return "❌ Invalid or expired link.", 404
+    return send_from_directory(RECDIR, fname)
+
+
 @app.route("/send_email", methods=["POST"])
 def send_email():
     data = request.get_json()
-    if not app.config.get("MAIL_USERNAME"): return jsonify({"status": "fail", "error": "Mail service is not configured."}), 503
+    # Check if mail is configured before trying to send
+    if not app.config.get("MAIL_USERNAME") or not app.config.get("MAIL_PASSWORD"):
+        return jsonify({"status": "fail", "error": "Mail service is not configured on the server."}), 503
+
     try:
-        msg = Message("GrabScreen recording", recipients=[data["to"]], body=f"Hi,\n\nHere is your recording:\n{data['url']}\n\nEnjoy!")
+        msg = Message(
+            "GrabScreen recording",
+            recipients=[data["to"]],
+            body=f"Hi,\n\nHere is your recording:\n{data['url']}\n\nEnjoy!"
+        )
         mail.send(msg)
         return jsonify({"status": "ok"})
     except Exception as e:
+        # Provide a more generic error to the user for security
         app.logger.error(f"Mail sending failed: {e}")
         return jsonify({"status": "fail", "error": "Could not send the email."}), 500
 
 @app.route("/debug/files")
 def list_files():
-    if os.getenv("FLASK_ENV") == "development": return "<br>".join(sorted(os.listdir(RECDIR)))
+    # It's better to check for a specific debug flag than just app.debug
+    if os.getenv("FLASK_ENV") == "development":
+        return "<br>".join(sorted(os.listdir(RECDIR)))
     return "Not available in production", 404
 
 @app.route("/delete/<filename>", methods=["POST"])
 def delete_file(filename):
-    if ".." in filename or filename.startswith("/"): return jsonify({"status": "fail", "error": "Invalid filename"}), 400
+    # Security: Ensure filename is safe and doesn't traverse directories
+    if ".." in filename or filename.startswith("/"):
+        return jsonify({"status": "fail", "error": "Invalid filename"}), 400
+
     file_path = os.path.join(RECDIR, filename)
-    if not os.path.abspath(file_path).startswith(os.path.abspath(RECDIR)): return jsonify({"status": "fail", "error": "Access denied"}), 403
-    if not os.path.exists(file_path): return jsonify({"status": "fail", "error": "File not found"}), 404
+    
+    # Security: Verify the final path is still within the intended directory
+    if not os.path.abspath(file_path).startswith(os.path.abspath(RECDIR)):
+        return jsonify({"status": "fail", "error": "Access denied"}), 403
+
+    if not os.path.exists(file_path):
+        return jsonify({"status": "fail", "error": "File not found"}), 404
     try:
         os.remove(file_path)
-        mp4_path = os.path.join(RECDIR, os.path.splitext(filename)[0] + ".mp4")
-        if os.path.exists(mp4_path): os.remove(mp4_path)
+        
+        # Clean up session data
         token = request.cookies.get("magic_token")
         if token and token in user_sessions and filename in user_sessions[token]:
             user_sessions[token].remove(filename)
             save_json(user_sessions, SESSIONS_FILE)
+        
+        # Clean up public links
         global public_links
         public_links = load_json(LINKS_FILE)
         for t, f in list(public_links.items()):
-            if f == filename: del public_links[t]
+            if f == filename:
+                del public_links[t]
         save_json(public_links, LINKS_FILE)
+
         return jsonify({"status": "ok", "message": f"{filename} deleted"})
     except Exception as e:
         app.logger.error(f"File deletion failed: {e}")
         return jsonify({"status": "fail", "error": "Could not delete the file."}), 500
 
+# NEW ROUTE FOR CONTACT FORM
 @app.route("/contact_us", methods=["POST"])
 def contact_us():
+    # Ensure mail is configured before trying to send
+    if not app.config.get("MAIL_USERNAME") or not app.config.get("MAIL_PASSWORD"):
+        return jsonify({"status": "fail", "error": "Mail service is not configured on the server."}), 503
+
     data = request.get_json()
-    if not app.config.get("MAIL_USERNAME"): return jsonify({"status": "fail", "error": "Mail service is not configured."}), 503
-    from_email, subject, message_body = data.get("from_email"), data.get("subject"), data.get("message")
-    if not all([from_email, subject, message_body]): return jsonify({"status": "fail", "error": "Please fill out all fields."}), 400
+    from_email = data.get("from_email")
+    subject = data.get("subject")
+    message_body = data.get("message")
+
+    if not all([from_email, subject, message_body]):
+        return jsonify({"status": "fail", "error": "Please fill out all fields."}), 400
+
     try:
-        msg = Message(subject=f"[GrabScreen Contact] {subject}", recipients=[app.config["MAIL_USERNAME"]], body=f"From: {from_email}\n\n{message_body}", reply_to=from_email)
+        # Note: The email is sent TO your configured mail username.
+        msg = Message(
+            subject=f"[GrabScreen Contact] {subject}",
+            recipients=[app.config["MAIL_USERNAME"]], # Sends the email to yourself
+            body=f"You have a new message from: {from_email}\n\n---\n\n{message_body}",
+            reply_to=from_email # This lets you click "Reply" in your inbox to reply to the user
+        )
         mail.send(msg)
         return jsonify({"status": "ok", "message": "Your message has been sent!"})
     except Exception as e:
         app.logger.error(f"Contact form mail sending failed: {e}")
-        return jsonify({"status": "fail", "error": "Sorry, an error occurred."}), 500
+        return jsonify({"status": "fail", "error": "Sorry, an error occurred and the message could not be sent."}), 500
+
 
 if __name__ == "__main__":
-    app.run(debug=(os.getenv("FLASK_ENV") == "development"), port=5001)
+    # The debug flag should ideally come from an environment variable
+    app.run(debug=(os.getenv("FLASK_ENV") == "development"), port=5001) 
