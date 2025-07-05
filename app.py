@@ -1,4 +1,5 @@
-import os, datetime, subprocess, json, random, string, uuid
+# Add 'multiprocessing' to your imports
+import os, datetime, subprocess, json, random, string, uuid, multiprocessing
 from dotenv import load_dotenv 
 from flask import (
     Flask, render_template, request, jsonify,
@@ -49,6 +50,29 @@ def save_json(data, file_path):
 
 public_links = load_json(LINKS_FILE)
 user_sessions = load_json(SESSIONS_FILE)
+
+# +++ NEW: FFMPEG conversion function to run in background +++
+def run_ffmpeg_conversion(in_path, out_path):
+    """
+    Runs the ffmpeg command to convert webm to mp4.
+    This function is designed to be called in a separate process.
+    """
+    cmd = [
+        "ffmpeg", "-hide_banner", "-loglevel", "error",
+        "-i", in_path,
+        "-c:v", "libx264",       # H.264 is the most compatible video codec
+        "-c:a", "aac",           # AAC is the most compatible audio codec
+        "-pix_fmt", "yuv420p",   # Pixel format for max compatibility (e.g., QuickTime)
+        "-y", out_path
+    ]
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        # Log error or handle it (e.g., write an error file)
+        app.logger.error(f"FFMPEG conversion failed for {in_path}: {e.stderr}")
+        # To signal an error, you could remove the target file if it's empty
+        if os.path.exists(out_path):
+             os.remove(out_path) # Or write a .error file
 
 # ─────────────────────────────────────────────────────────
 # Routes
@@ -146,6 +170,46 @@ def clip(orig):
     except subprocess.CalledProcessError as e:
         return jsonify({"status": "fail", "error": e.stderr}), 500
 
+# +++ NEW ROUTE: START MP4 CONVERSION +++
+@app.route('/convert/mp4/<orig_name>', methods=['POST'])
+def convert_to_mp4(orig_name):
+    # Security check
+    if ".." in orig_name or orig_name.startswith("/"):
+        return jsonify({"status": "fail", "error": "Invalid filename"}), 400
+        
+    in_path = os.path.join(RECDIR, orig_name)
+    if not os.path.exists(in_path):
+        return jsonify({"status": "fail", "error": "Original file not found"}), 404
+        
+    # Create the new filename
+    new_name = os.path.splitext(orig_name)[0] + ".mp4"
+    out_path = os.path.join(RECDIR, new_name)
+    
+    # If the file already exists, just return it
+    if os.path.exists(out_path):
+        return jsonify({"status": "ready", "new_filename": new_name})
+
+    # Start the conversion in a background process
+    process = multiprocessing.Process(target=run_ffmpeg_conversion, args=(in_path, out_path))
+    process.start()
+    
+    # Immediately return a response to the user
+    return jsonify({"status": "processing", "new_filename": new_name}), 202
+
+# +++ NEW ROUTE: CHECK CONVERSION STATUS +++
+@app.route('/status/<filename>')
+def check_status(filename):
+    # Security check
+    if ".." in filename or filename.startswith("/"):
+        return jsonify({"status": "fail", "error": "Invalid filename"}), 400
+        
+    file_path = os.path.join(RECDIR, filename)
+    if os.path.exists(file_path):
+        return jsonify({"status": "ready"})
+    else:
+        return jsonify({"status": "processing"})
+
+
 @app.route("/recordings/<fname>")
 def recordings(fname):
     return send_from_directory(RECDIR, fname)
@@ -240,6 +304,7 @@ def list_files():
         return "<br>".join(sorted(os.listdir(RECDIR)))
     return "Not available in production", 404
 
+# +++ UPDATED: Delete function now also cleans up MP4 files +++
 @app.route("/delete/<filename>", methods=["POST"])
 def delete_file(filename):
     # Security: Ensure filename is safe and doesn't traverse directories
@@ -255,8 +320,15 @@ def delete_file(filename):
     if not os.path.exists(file_path):
         return jsonify({"status": "fail", "error": "File not found"}), 404
     try:
+        # Delete original webm file
         os.remove(file_path)
         
+        # Also delete the corresponding mp4 if it exists
+        mp4_filename = os.path.splitext(filename)[0] + ".mp4"
+        mp4_path = os.path.join(RECDIR, mp4_filename)
+        if os.path.exists(mp4_path):
+            os.remove(mp4_path)
+
         # Clean up session data
         token = request.cookies.get("magic_token")
         if token and token in user_sessions and filename in user_sessions[token]:
@@ -308,4 +380,4 @@ def contact_us():
 
 if __name__ == "__main__":
     # The debug flag should ideally come from an environment variable
-    app.run(debug=(os.getenv("FLASK_ENV") == "development"), port=5001) 
+    app.run(debug=(os.getenv("FLASK_ENV") == "development"), port=5001)
