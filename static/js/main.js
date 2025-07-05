@@ -26,7 +26,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const deleteModal = $("#deleteModal"), fileToDeleteEl = $("#fileToDelete"), deleteConfirmBtn = $("#deleteConfirm"), deleteCancelBtn = $("#deleteCancel");
   const emailModal = $("#emailModal"), forgetSessionModal = $("#forgetSessionModal");
   
-  // --- App State (Simplified: removed pollInterval) ---
+  // --- App State ---
   let mediaRecorder, chunks = [], currentFile = null, trimSlider = null;
 
   // ===================================================================
@@ -70,9 +70,6 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   
   const activateFile = (filename) => {
-    // Stop any active polling from previous implementations if it exists
-    if (window.pollInterval) clearInterval(window.pollInterval); 
-    
     if (!filename) {
       currentFile = null;
       previewArea.classList.add("hidden");
@@ -82,24 +79,7 @@ document.addEventListener("DOMContentLoaded", () => {
     currentFile = filename;
     preview.src = fullUrl(filename); 
     previewArea.classList.remove("hidden");
-    
-    // Actions panel with simplified "Convert to .mp4" link
-    actionsPanel.innerHTML = `
-      <div class="dropdown">
-        <button class="btn"><i class="fa-solid fa-download"></i> Download</button>
-        <div class="dropdown-menu">
-          <a href="/download/${filename}" class="dropdown-item" download><i class="fa-solid fa-file-video"></i> Download .webm (Instant)</a>
-          <div class="dropdown-divider"></div>
-          <a href="/convert/mp4/${filename}" class="dropdown-item" data-action="convert-mp4"><i class="fa-solid fa-film"></i> Convert to .mp4</a>
-          <div id="mp4-status" class="dropdown-status"></div>
-        </div>
-      </div>
-      <button class="btn" data-action="secure-link"><i class="fa-solid fa-lock"></i> Secure Link</button>
-      <button class="btn" data-action="public-link"><i class="fa-solid fa-globe"></i> Public Link</button>
-      <button class="btn" data-action="email"><i class="fa-solid fa-envelope"></i> Email</button>
-      <button class="btn" data-action="clip"><i class="fa-solid fa-scissors"></i> Trim</button>
-      <button class="btn danger" data-action="delete"><i class="fa-solid fa-trash-can"></i> Delete</button>
-    `;
+    actionsPanel.innerHTML = `<a href="/download/${filename}" class="btn" download><i class="fa-solid fa-download"></i> Download</a><button class="btn" data-action="secure-link"><i class="fa-solid fa-lock"></i> Secure Link</button><button class="btn" data-action="public-link"><i class="fa-solid fa-globe"></i> Public Link</button><button class="btn" data-action="email"><i class="fa-solid fa-envelope"></i> Email</button><button class="btn" data-action="clip"><i class="fa-solid fa-scissors"></i> Trim</button><button class="btn danger" data-action="delete"><i class="fa-solid fa-trash-can"></i> Delete</button>`;
     $$(".media-card").forEach(card => card.classList.toggle("selected", card.dataset.filename === filename));
     previewArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
@@ -148,10 +128,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // EVENT LISTENERS
   // ===================================================================
 
+  // --- Main Page Navigation (Isolated and Correct) ---
   $("#showPrivacyLink")?.addEventListener("click", (e) => { e.preventDefault(); showView('privacy'); });
   $("#showContactLink")?.addEventListener("click", (e) => { e.preventDefault(); showView('contact'); });
   $$(".back-btn").forEach(btn => btn.addEventListener("click", (e) => { e.preventDefault(); showView('recorder'); }));
 
+  // --- Recorder Controls ---
   startBtn?.addEventListener("click", async () => {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: { mediaSource: "screen" }, audio: true });
@@ -171,16 +153,30 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
           statusMsg.textContent = "❌ Upload failed: " + res.error;
         }
-        startBtn.classList.remove("hidden"); pauseBtn.classList.add("hidden"); resumeBtn.classList.add("hidden"); stopBtn.classList.add("hidden");
+        startBtn.classList.remove("hidden");
+        pauseBtn.classList.add("hidden");
+        resumeBtn.classList.add("hidden");
+        stopBtn.classList.add("hidden");
       };
       mediaRecorder.start();
       stream.getVideoTracks()[0].onended = () => stopBtn.click();
       statusMsg.textContent = "🎬 Recording…";
-      startBtn.classList.add("hidden"); stopBtn.classList.remove("hidden"); pauseBtn.classList.remove("hidden");
+      startBtn.classList.add("hidden");
+      stopBtn.classList.remove("hidden");
+      pauseBtn.classList.remove("hidden");
     } catch (err) {
-      if (err.name === 'NotAllowedError') { statusMsg.textContent = "🤔 Recording cancelled. Ready when you are!"; } 
-      else { statusMsg.textContent = "❌ Could not start recording. Please try again."; console.error("An unexpected error occurred when starting recording:", err); }
-      setTimeout(() => { statusMsg.textContent = ""; }, 5000);
+      // --- NEW: DYNAMIC ERROR HANDLING ---
+      if (err.name === 'NotAllowedError') {
+        statusMsg.textContent = "🤔 Recording cancelled. Ready when you are!";
+      } else {
+        statusMsg.textContent = "❌ Could not start recording. Please try again.";
+        console.error("An unexpected error occurred when starting recording:", err);
+      }
+      
+      // Clear the message after 5 seconds
+      setTimeout(() => {
+        statusMsg.textContent = "";
+      }, 5000);
     }
   });
 
@@ -188,46 +184,27 @@ document.addEventListener("DOMContentLoaded", () => {
   resumeBtn?.addEventListener("click", () => { mediaRecorder.resume(); statusMsg.textContent = "🎬 Recording…"; resumeBtn.classList.add("hidden"); pauseBtn.classList.remove("hidden"); });
   stopBtn?.addEventListener("click", () => { if (mediaRecorder?.state !== "inactive") mediaRecorder.stop(); });
   
+  // --- Other Button/Panel Listeners ---
   sessionBtn?.addEventListener("click", () => { filesPanel.classList.toggle("hidden"); filesPanel.scrollIntoView({ behavior: 'smooth' }); });
   forgetBtn?.addEventListener("click", () => forgetSessionModal?.showModal());
 
-  // +++ SIMPLIFIED: actionsPanel listener +++
   actionsPanel.addEventListener("click", async (e) => {
-    const target = e.target.closest("[data-action]");
-    if (!target || !currentFile) return;
+    const button = e.target.closest("button[data-action]");
+    if (!button || !currentFile) return;
+    const action = button.dataset.action;
     
-    const action = target.dataset.action;
-    
-    // Prevent default link behavior for JS-handled actions
-    if (action !== 'convert-mp4') {
-        e.preventDefault();
-    }
-
     switch (action) {
       case "clip": setupTrimSlider(); break;
-      case "secure-link": { const r = await apiFetch(`/link/secure/${currentFile}`).then(r => r.json()); if (r.status === "ok") copy(r.url, target); break; }
-      case "public-link": { const r = await apiFetch(`/link/public/${currentFile}`).then(r => r.json()); if (r.status === "ok") { copy(r.url, target); target.innerHTML = `<i class="fa-solid fa-link"></i> Public Link Active`; } break; }
+      case "secure-link": { const r = await apiFetch(`/link/secure/${currentFile}`).then(r => r.json()); if (r.status === "ok") copy(r.url, button); break; }
+      case "public-link": { const r = await apiFetch(`/link/public/${currentFile}`).then(r => r.json()); if (r.status === "ok") { copy(r.url, button); button.innerHTML = `<i class="fa-solid fa-link"></i> Public Link Active`; } break; }
       case "email": emailModal?.showModal(); break;
       case "delete":
         fileToDeleteEl.textContent = currentFile;
         deleteConfirmBtn.dataset.filename = currentFile;
         deleteModal?.showModal();
         break;
-      case "convert-mp4": {
-        // We no longer prevent the default browser navigation for this link.
-        // Instead, we just show a waiting message.
-        const mp4StatusDiv = $("#mp4-status");
-        if(mp4StatusDiv) {
-            mp4StatusDiv.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Converting... Please wait.`;
-        }
-        // The browser will now navigate to the href of the link,
-        // and the server will handle the download.
-        break;
-      }
     }
   });
-
-  // --- Functions pollForFile and updateMp4Link have been REMOVED ---
 
   // --- Modal Button Listeners ---
   $("#clipCancel")?.addEventListener("click", () => { clipPanel.classList.add("hidden"); if (trimSlider) { trimSlider.destroy(); trimSlider = null; } statusMsg.textContent = ""; });
@@ -249,7 +226,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const btn = e.target.closest("button");
       btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Sending...`;
       const linkRes = await apiFetch(`/link/secure/${currentFile}`).then(r => r.json());
-      if (linkRes.status !== 'ok') { alert('Could not generate a secure link.'); btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send`; return; }
+      if (linkRes.status !== 'ok') {
+          alert('Could not generate a secure link.');
+          btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send`; return;
+      }
       const r = await apiFetch("/send_email", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ to, url: linkRes.url }) }).then(x => x.json());
       $("#emailStatus").textContent = r.status === "ok" ? "✅ Sent!" : "❌ " + (r.error || "Failed");
       btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send`;
@@ -264,12 +244,17 @@ document.addEventListener("DOMContentLoaded", () => {
       btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Deleting...`;
       const r = await apiFetch(`/delete/${filename}`, { method: "POST" }).then(r => r.json());
       if (r.status === "ok") {
+        // +++ START: ADDED CONFIRMATION MESSAGE +++
         statusMsg.textContent = `✅ Recording deleted successfully.`;
         setTimeout(() => { statusMsg.textContent = ""; }, 4000);
+        // +++ END: ADDED CONFIRMATION MESSAGE +++
+        
         const card = $(`.media-card[data-filename="${filename}"]`);
         if (card) { card.classList.add("deleting"); card.addEventListener("animationend", () => card.remove()); }
         if (currentFile === filename) activateFile(null);
-      } else { alert("❌ Delete failed: " + r.error); }
+      } else {
+        alert("❌ Delete failed: " + r.error);
+      }
       btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-trash-can"></i> Yes, Delete`;
       deleteModal.close();
   });
@@ -287,30 +272,84 @@ document.addEventListener("DOMContentLoaded", () => {
       btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-eraser"></i> Yes, Forget Session`;
   });
 
+  // --- Contact Form Modal Logic (Updated for better styling) ---
   const contactModal = $("#contactModal");
-  $("#showContactModalBtn")?.addEventListener("click", () => { $("#contactStatus").textContent = ""; $("#contactStatus").className = ""; contactModal?.showModal(); });
-  $("#contactCancelBtn")?.addEventListener("click", () => { contactModal?.close(); });
-  $("#contactSendBtn")?.addEventListener("click", async () => {
+  const showContactModalBtn = $("#showContactModalBtn");
+  const contactCancelBtn = $("#contactCancelBtn");
+  const contactSendBtn = $("#contactSendBtn");
+  const contactStatus = $("#contactStatus");
+
+  showContactModalBtn?.addEventListener("click", () => {
+    contactStatus.textContent = "";
+    contactStatus.className = ""; 
+    contactModal?.showModal();
+  });
+
+  contactCancelBtn?.addEventListener("click", () => {
+    contactModal?.close();
+  });
+
+  contactSendBtn?.addEventListener("click", async () => {
     const from_email = $("#contactFromEmail").value.trim();
     const subject = $("#contactSubject").value.trim();
     const message = $("#contactMessage").value.trim();
-    if (!from_email || !subject || !message) { $("#contactStatus").className = "error"; $("#contactStatus").textContent = "❌ Please fill out all fields."; return; }
-    $("#contactSendBtn").disabled = true; $("#contactSendBtn").innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Sending...`; $("#contactStatus").className = ""; $("#contactStatus").textContent = "";
-    const res = await apiFetch("/contact_us", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ from_email, subject, message }) }).then(r => r.json());
+
+    if (!from_email || !subject || !message) {
+      contactStatus.className = "error";
+      contactStatus.textContent = "❌ Please fill out all fields.";
+      return;
+    }
+
+    contactSendBtn.disabled = true;
+    contactSendBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Sending...`;
+    contactStatus.className = "";
+    contactStatus.textContent = "";
+
+    const res = await apiFetch("/contact_us", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ from_email, subject, message })
+    }).then(r => r.json());
+
     if (res.status === "ok") {
-      $("#contactStatus").className = "success"; $("#contactStatus").textContent = "✅ Message Sent! We'll get back to you soon.";
-      setTimeout(() => { contactModal.close(); $("#contactFromEmail").value = ""; $("#contactSubject").value = ""; $("#contactMessage").value = ""; }, 2500);
-    } else { $("#contactStatus").className = "error"; $("#contactStatus").textContent = `❌ ${res.error || "An unknown error occurred."}`; }
-    $("#contactSendBtn").disabled = false; $("#contactSendBtn").innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send Message`;
+      contactStatus.className = "success";
+      contactStatus.textContent = "✅ Message Sent! We'll get back to you soon.";
+      setTimeout(() => {
+        contactModal.close();
+        $("#contactFromEmail").value = "";
+        $("#contactSubject").value = "";
+        $("#contactMessage").value = "";
+      }, 2500);
+    } else {
+      contactStatus.className = "error";
+      contactStatus.textContent = `❌ ${res.error || "An unknown error occurred."}`;
+    }
+
+    contactSendBtn.disabled = false;
+    contactSendBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send Message`;
   });
 
-  $("#mobileWarningClose")?.addEventListener("click", () => { $("#mobileWarningModal")?.close(); });
+  // --- BUG FIX FOR MOBILE WARNING MODAL ---
+  $("#mobileWarningClose")?.addEventListener("click", () => {
+    $("#mobileWarningModal")?.close();
+  });
 
   // ===================================================================
-  // INITIALIZATION
+  // INITIALIZATION (Runs once on page load)
   // ===================================================================
   (async () => {
-    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) { $("#mobileWarningModal")?.showModal(); if(startBtn) { startBtn.disabled = true; startBtn.innerHTML = `<i class="fa-solid fa-desktop"></i> Desktop Only`; } }
-    try { const { files = [] } = await apiFetch("/session/files").then(r => r.json()); renderFiles(files.reverse()); } catch {}
+    // Mobile check
+    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+      $("#mobileWarningModal")?.showModal();
+      if(startBtn) {
+        startBtn.disabled = true;
+        startBtn.innerHTML = `<i class="fa-solid fa-desktop"></i> Desktop Only`;
+      }
+    }
+    // Load files
+    try {
+      const { files = [] } = await apiFetch("/session/files").then(r => r.json());
+      renderFiles(files.reverse());
+    } catch {}
   })();
 });
