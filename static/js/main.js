@@ -25,6 +25,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const trimSliderEl = $("#trim-slider"), trimStartTime = $("#trim-start-time"), trimEndTime = $("#trim-end-time");
   const deleteModal = $("#deleteModal"), fileToDeleteEl = $("#fileToDelete"), deleteConfirmBtn = $("#deleteConfirm"), deleteCancelBtn = $("#deleteCancel");
   const emailModal = $("#emailModal"), forgetSessionModal = $("#forgetSessionModal");
+  const mobileWarningModal = $("#mobileWarningModal");
+  const mobileWarningCloseBtn = $("#mobileWarningClose");
   
   // --- App State ---
   let mediaRecorder, chunks = [], currentFile = null, trimSlider = null;
@@ -165,18 +167,13 @@ document.addEventListener("DOMContentLoaded", () => {
       stopBtn.classList.remove("hidden");
       pauseBtn.classList.remove("hidden");
     } catch (err) {
-      // --- NEW: DYNAMIC ERROR HANDLING ---
       if (err.name === 'NotAllowedError') {
         statusMsg.textContent = "🤔 Recording cancelled. Ready when you are!";
       } else {
         statusMsg.textContent = "❌ Could not start recording. Please try again.";
         console.error("An unexpected error occurred when starting recording:", err);
       }
-      
-      // Clear the message after 5 seconds
-      setTimeout(() => {
-        statusMsg.textContent = "";
-      }, 5000);
+      setTimeout(() => { statusMsg.textContent = ""; }, 5000);
     }
   });
 
@@ -267,7 +264,7 @@ document.addEventListener("DOMContentLoaded", () => {
       btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-eraser"></i> Yes, Forget Session`;
   });
 
-  // --- Contact Form Modal Logic (Updated for better styling) ---
+  // --- Contact Form Modal Logic ---
   const contactModal = $("#contactModal");
   const showContactModalBtn = $("#showContactModalBtn");
   const contactCancelBtn = $("#contactCancelBtn");
@@ -280,10 +277,7 @@ document.addEventListener("DOMContentLoaded", () => {
     contactModal?.showModal();
   });
 
-  contactCancelBtn?.addEventListener("click", () => {
-    contactModal?.close();
-  });
-
+  contactCancelBtn?.addEventListener("click", () => contactModal?.close());
   contactSendBtn?.addEventListener("click", async () => {
     const from_email = $("#contactFromEmail").value.trim();
     const subject = $("#contactSubject").value.trim();
@@ -294,12 +288,10 @@ document.addEventListener("DOMContentLoaded", () => {
       contactStatus.textContent = "❌ Please fill out all fields.";
       return;
     }
-
     contactSendBtn.disabled = true;
     contactSendBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Sending...`;
     contactStatus.className = "";
     contactStatus.textContent = "";
-
     const res = await apiFetch("/contact_us", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -319,11 +311,12 @@ document.addEventListener("DOMContentLoaded", () => {
       contactStatus.className = "error";
       contactStatus.textContent = `❌ ${res.error || "An unknown error occurred."}`;
     }
-
     contactSendBtn.disabled = false;
     contactSendBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send Message`;
   });
 
+  // --- Mobile Warning Modal Close Button (Bug Fix) ---
+  mobileWarningCloseBtn?.addEventListener("click", () => mobileWarningModal?.close());
 
   // ===================================================================
   // INITIALIZATION (Runs once on page load)
@@ -331,7 +324,7 @@ document.addEventListener("DOMContentLoaded", () => {
   (async () => {
     // Mobile check
     if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
-      $("#mobileWarningModal")?.showModal();
+      mobileWarningModal?.showModal();
       if(startBtn) {
         startBtn.disabled = true;
         startBtn.innerHTML = `<i class="fa-solid fa-desktop"></i> Desktop Only`;
