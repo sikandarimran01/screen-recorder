@@ -244,6 +244,11 @@ document.addEventListener("DOMContentLoaded", () => {
       btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Deleting...`;
       const r = await apiFetch(`/delete/${filename}`, { method: "POST" }).then(r => r.json());
       if (r.status === "ok") {
+        // +++ START: ADDED CONFIRMATION MESSAGE +++
+        statusMsg.textContent = `✅ Recording deleted successfully.`;
+        setTimeout(() => { statusMsg.textContent = ""; }, 4000);
+        // +++ END: ADDED CONFIRMATION MESSAGE +++
+        
         const card = $(`.media-card[data-filename="${filename}"]`);
         if (card) { card.classList.add("deleting"); card.addEventListener("animationend", () => card.remove()); }
         if (currentFile === filename) activateFile(null);
@@ -324,12 +329,10 @@ document.addEventListener("DOMContentLoaded", () => {
     contactSendBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send Message`;
   });
 
-  // +++ START: BUG FIX FOR MOBILE WARNING MODAL +++
+  // --- BUG FIX FOR MOBILE WARNING MODAL ---
   $("#mobileWarningClose")?.addEventListener("click", () => {
     $("#mobileWarningModal")?.close();
   });
-  // +++ END: BUG FIX FOR MOBILE WARNING MODAL +++
-
 
   // ===================================================================
   // INITIALIZATION (Runs once on page load)
