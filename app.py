@@ -1,4 +1,3 @@
-# app.py (Updated to use .env file)
 
 import os, datetime, subprocess, json, random, string, uuid
 from dotenv import load_dotenv 
