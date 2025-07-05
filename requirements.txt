@@ -4,3 +4,4 @@ flask_mail
 requests
 itsdangerous
 python-dotenv
+gevent  
