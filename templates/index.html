@@ -92,16 +92,58 @@
 
   <!-- Info Panels (Privacy/Contact) -->
   <section id="privacyView" class="info-panel hidden">
-      <!-- Your privacy policy content here -->
+      <!-- START: Privacy Policy Content -->
       <button class="btn back-btn"><i class="fa-solid fa-arrow-left"></i> Back to Recorder</button>
-      <h1>Privacy Policy for GrabScreen</h1>
-      <!-- ... -->
+      <h1><i class="fa-solid fa-shield-halved"></i> Privacy Policy</h1>
+      <p style="text-align: center; color: var(--muted);">Last Updated: April 26, 2024</p>
+
+      <p>Welcome to GrabScreen. We are committed to protecting your privacy. This Privacy Policy explains what information we collect, how we use it, and the controls you have over your data on this platform.</p>
+
+      <h2>Information We Collect</h2>
+      <ul>
+          <li><strong>Screen Recordings:</strong> The video files (.webm) you create are uploaded and stored on our server so that you can access, trim, and share them.</li>
+          <li><strong>Anonymous Session Cookie:</strong> We use a single, functional cookie (your "magic_token") to associate your recordings with your browser. This token is a random string of characters and contains no personal information. It is used solely to display your list of files on your return visits.</li>
+          <li><strong>Email Addresses:</strong> We only collect an email address when you voluntarily provide it through the "Email" sharing feature. We do not store this email address after the email has been sent.</li>
+      </ul>
+
+      <h2>How We Use Your Information</h2>
+      <ul>
+          <li><strong>To Provide the Service:</strong> Your recordings are stored to allow you to view, download, or create clips from them.</li>
+          <li><strong>To Maintain Your Session:</strong> The "magic_token" cookie ensures that when you revisit our site from the same browser, you see your own list of recordings.</li>
+          <li><strong>To Fulfill Your Requests:</strong> When you use the "Email" feature, we use the provided email address to send a one-time email containing the link to your recording.</li>
+      </ul>
+      
+      <h2>Your Control and Data Rights</h2>
+      <p>You have complete control over your recordings. Here’s how:</p>
+      <ul>
+          <li><strong><i class="fa-solid fa-trash-can"></i> Deleting a File:</strong> Using the "Delete" button on a recording will <strong>permanently and irreversibly</strong> delete the video file from our server. This also removes any public or secure links associated with it.</li>
+          <li><strong><i class="fa-solid fa-user-slash"></i> Forgetting Your Session:</strong> Using the "Forget My Session" button will delete the "magic_token" cookie from your browser. This means your list of recordings will disappear from your view, but the <strong>files will remain on the server</strong> until you delete them individually. This is for your privacy in a shared computer environment.</li>
+          <li><strong><i class="fa-solid fa-globe"></i> Public Links:</strong> When you create a "Public Link", anyone with that link can view the recording. The link remains active until you delete the source file.</li>
+          <li><strong><i class="fa-solid fa-lock"></i> Secure Links:</strong> "Secure Links" are temporary and expire after a short period (15 minutes). They are ideal for private, one-time sharing.</li>
+      </ul>
+
+      <h2>Third-Party Services</h2>
+      <p>We use Google's SMTP server to send emails on your behalf. We also use public CDNs to load resources like fonts and scripts for better performance. These third parties have their own privacy policies, and we do not share your recording data with them beyond what is necessary to provide the service (e.g., sending an email link).</p>
+      
+      <h2>Changes to This Policy</h2>
+      <p>We may update this policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page.</p>
+      <!-- END: Privacy Policy Content -->
   </section>
   <section id="contactView" class="info-panel hidden">
-      <!-- Your contact content here -->
+      <!-- START: New Contact Content -->
       <button class="btn back-btn"><i class="fa-solid fa-arrow-left"></i> Back to Recorder</button>
-      <h1>Get in Touch</h1>
-      <!-- ... -->
+      <h1><i class="fa-solid fa-paper-plane"></i> Get in Touch</h1>
+      <p>Have a question, a suggestion, or need to report an issue? Please use the form below to send us a direct message.</p>
+
+      <div style="margin: 2rem 0; text-align: center;">
+          <!-- This is now a BUTTON that opens the modal -->
+          <button id="showContactModalBtn" class="btn share" style="font-size: 1.2rem; padding: 1rem 2rem;">
+              <i class="fa-solid fa-envelope"></i> Open Contact Form
+          </button>
+      </div>
+
+      <p>We do our best to respond to all inquiries within 48 business hours.</p>
+      <!-- END: New Contact Content -->
   </section>
 
   <!-- Other elements -->
@@ -122,7 +164,21 @@
     <button id="deleteCancel" class="btn" formmethod="dialog">Cancel</button>
   </dialog>
 
-  <!-- NEW: Mobile Warning Dialog -->
+  <!-- Forget Session Confirmation Dialog -->
+  <dialog id="forgetSessionModal">
+    <h2><i class="fa-solid fa-user-slash"></i> Forget Your Session?</h2>
+    <p>
+      This will clear the list of your recordings from this browser's memory. 
+      You won't see them here anymore.
+    </p>
+    <p style="color: var(--muted); font-size: 0.9em;">
+      Note: Your actual video files on the server will <strong>not</strong> be deleted.
+    </p>
+    <button id="forgetConfirm" class="btn danger"><i class="fa-solid fa-eraser"></i> Yes, Forget Session</button>
+    <button id="forgetCancel" class="btn" formmethod="dialog">Cancel</button>
+  </dialog>
+
+  <!-- Mobile Warning Dialog -->
   <dialog id="mobileWarningModal">
     <h2><i class="fa-solid fa-desktop"></i> Built for the Big Screen</h2>
     <p>
@@ -133,6 +189,24 @@
       Please visit us on a <strong>desktop or laptop computer</strong> to enjoy all the features.
     </p>
     <button id="mobileWarningClose" class="btn">I Understand</button>
+  </dialog>
+
+  <!-- NEW: Contact Form Modal -->
+  <dialog id="contactModal">
+    <h2><i class="fa-solid fa-paper-plane"></i> Send Us a Message</h2>
+    <label>Your Email (for replies)</label>
+    <input id="contactFromEmail" type="email" placeholder="you@example.com" required />
+    
+    <label>Subject</label>
+    <input id="contactSubject" type="text" placeholder="Question about recordings" required />
+
+    <label>Message</label>
+    <textarea id="contactMessage" rows="5" placeholder="Please describe your issue or question..." required></textarea>
+    
+    <div id="contactStatus" style="margin-top: 0.5rem; min-height: 1.2em;"></div>
+
+    <button id="contactSendBtn" class="btn share"><i class="fa-solid fa-paper-plane"></i> Send Message</button>
+    <button id="contactCancelBtn" class="btn cancel" formmethod="dialog">Cancel</button>
   </dialog>
 
   <footer class="site-footer">
