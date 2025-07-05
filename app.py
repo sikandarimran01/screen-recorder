@@ -167,22 +167,28 @@ def download(fname):
 @app.route("/download/mp4/<filename>", endpoint="download_mp4")
 def download_mp4(filename):
     if not filename.endswith(".webm"):
-        return jsonify({"status": "fail", "error": "Invalid file type. Only .webm allowed."}), 400
+        return jsonify({"status": "fail", "error": "Invalid file type. Only .webm allowed for conversion input."}), 400
 
     webm_path = os.path.join(RECDIR, filename)
     if not os.path.exists(webm_path):
         return jsonify({"status": "fail", "error": "Original WEBM file not found"}), 404
 
     mp4_filename = filename.replace(".webm", ".mp4")
-    mp4_path     = os.path.join(MP4_DIR, mp4_filename)
+    mp4_path = os.path.join(MP4_DIR, mp4_filename)
 
+    # Check if MP4 already exists
     if not os.path.exists(mp4_path):
+        # Convert using ffmpeg
         ffmpeg_cmd = [
-            "ffmpeg", "-y",
+            "ffmpeg",
+            "-y",
             "-i", webm_path,
-            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-            "-c:a", "aac", "-b:a", "128k",
-            mp4_path
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-crf", "23",
+            "-c:a", "aac",
+            "-b:a", "128k",
+            mp4_path,
         ]
         try:
             result = subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True)
@@ -195,13 +201,22 @@ def download_mp4(filename):
                 "ffmpeg_error": e.stderr
             }), 500
         except Exception as e:
-            app.logger.error(f"❌ Error during FFmpeg conversion for {filename}: {e}")
+            app.logger.error(f"❌ Error during FFmpeg conversion for {filename}:\n{e}")
             return jsonify({
                 "status": "fail",
                 "error": "Unexpected error during conversion.",
                 "exception": str(e)
             }), 500
 
+    # ✅ Check for empty file before sending
+    if os.path.getsize(mp4_path) == 0:
+        app.logger.error(f"❌ Converted MP4 is 0 bytes: {mp4_path}")
+        return jsonify({
+            "status": "fail",
+            "error": "Converted video is empty. Try re-uploading or trimming the recording."
+        }), 500
+
+    # Serve the MP4 file
     return send_from_directory(MP4_DIR, mp4_filename, as_attachment=True, mimetype="video/mp4")
 
 # ── Secure / Public Links ----------------------------------------------------
