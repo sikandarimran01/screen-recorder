@@ -150,13 +150,17 @@ def clip(orig):
 
 @app.route("/recordings/<fname>")
 def recordings(fname):
-    # This serves WEBM files for preview and default download
     return send_from_directory(RECDIR, fname)
 
 @app.route("/download/<fname>")
 def download(fname):
-    # This is the default WEBM download
     return send_from_directory(RECDIR, fname, as_attachment=True)
+
+# ...
+@app.route("/download/mp4/<filename>")
+def download_mp4(filename):
+    # ...
+    return send_from_directory(MP4_DIR, mp4_filename, as_attachment=True)
 
 # NEW ROUTE: Download as MP4
 @app.route("/download/mp4/<filename>")
