@@ -324,6 +324,12 @@ document.addEventListener("DOMContentLoaded", () => {
     contactSendBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send Message`;
   });
 
+  // +++ START: BUG FIX FOR MOBILE WARNING MODAL +++
+  $("#mobileWarningClose")?.addEventListener("click", () => {
+    $("#mobileWarningModal")?.close();
+  });
+  // +++ END: BUG FIX FOR MOBILE WARNING MODAL +++
+
 
   // ===================================================================
   // INITIALIZATION (Runs once on page load)
