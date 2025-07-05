@@ -116,7 +116,16 @@
 
     <div id="previewArea" class="hidden">
       <video id="preview" controls></video>
-      <div id="actionsPanel"></div>
+      <div id="actionsPanel">
+        <!-- Re-added the download buttons with updated text, as they were missing in your last paste -->
+        <a href="/download/${filename}" class="btn" download><i class="fa-solid fa-download"></i> Download WEBM</a>
+        <button class="btn" data-action="download-mp4"><i class="fa-solid fa-file-video"></i> Download MP4</button>
+        <button class="btn" data-action="secure-link"><i class="fa-solid fa-lock"></i> Secure Link</button>
+        <button class="btn" data-action="public-link"><i class="fa-solid fa-globe"></i> Public Link</button>
+        <button class="btn" data-action="email"><i class="fa-solid fa-envelope"></i> Email</button>
+        <button class="btn" data-action="clip"><i class="fa-solid fa-scissors"></i> Trim</button>
+        <button class="btn danger" data-action="delete"><i class="fa-solid fa-trash-can"></i> Delete</button>
+      </div>
     </div>
     <section id="clipPanel" class="panel hidden">
       <div class="panel-header">
