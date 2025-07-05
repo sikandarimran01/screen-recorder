@@ -148,22 +148,18 @@ def clip(orig):
     except subprocess.CalledProcessError as e:
         return jsonify({"status": "fail", "error": e.stderr}), 500
 
-@app.route("/recordings/<fname>")
+@app.route("/recordings/<fname>", endpoint="get_recording_webm") # Added endpoint
 def recordings(fname):
-    return send_from_directory(RECDIR, fname)
+    # This serves WEBM files for preview and default download
+    return send_from_directory(RECDIR, fname, mimetype="video/webm") # Added mimetype
 
-@app.route("/download/<fname>")
+@app.route("/download/<fname>", endpoint="download_webm") # Added endpoint
 def download(fname):
-    return send_from_directory(RECDIR, fname, as_attachment=True)
-
-# ...
-@app.route("/download/mp4/<filename>")
-def download_mp4(filename):
-    # ...
-    return send_from_directory(MP4_DIR, mp4_filename, as_attachment=True)
+    # This is the default WEBM download
+    return send_from_directory(RECDIR, fname, as_attachment=True, mimetype="video/webm") # Added mimetype
 
 # NEW ROUTE: Download as MP4
-@app.route("/download/mp4/<filename>")
+@app.route("/download/mp4/<filename>", endpoint="download_mp4") # Added endpoint
 def download_mp4(filename):
     if not filename.endswith(".webm"):
         return jsonify({"status": "fail", "error": "Invalid file type. Only .webm allowed for conversion input."}), 400
@@ -199,10 +195,10 @@ def download_mp4(filename):
             return jsonify({"status": "fail", "error": f"An unexpected error occurred during conversion: {str(e)}"}), 500
     
     # Send the MP4 file for download
-    return send_from_directory(MP4_DIR, mp4_filename, as_attachment=True)
+    return send_from_directory(MP4_DIR, mp4_filename, as_attachment=True, mimetype="video/mp4") # Added mimetype
 
 
-@app.route("/link/secure/<fname>")
+@app.route("/link/secure/<fname>", endpoint="generate_secure_link") # Added endpoint
 def generate_secure_link(fname):
     if not os.path.exists(os.path.join(RECDIR, fname)):
         return jsonify({"status": "fail", "error": "file not found"}), 404
@@ -211,7 +207,7 @@ def generate_secure_link(fname):
     url = request.url_root.rstrip("/") + "/secure/" + token
     return jsonify({"status": "ok", "url": url})
 
-@app.route("/secure/<token>")
+@app.route("/secure/<token>", endpoint="secure_download") # Added endpoint
 def secure_download(token):
     try:
         fname = serializer.loads(token, max_age=TOKEN_EXPIRY_SECONDS)
@@ -221,7 +217,7 @@ def secure_download(token):
         return "❌ Invalid link.", 400
     return send_from_directory(RECDIR, fname)
 
-@app.route("/link/public/<fname>", methods=["GET"])
+@app.route("/link/public/<fname>", methods=["GET"], endpoint="get_or_create_public_link") # Added endpoint
 def get_or_create_public_link(fname):
     global public_links
     public_links = load_json(LINKS_FILE)
@@ -238,7 +234,7 @@ def get_or_create_public_link(fname):
     save_json(public_links, LINKS_FILE)
     return jsonify({"status": "ok", "url": request.url_root.rstrip("/") + "/public/" + token, "isNew": True})
 
-@app.route("/link/public/<fname>", methods=["DELETE"])
+@app.route("/link/public/<fname>", methods=["DELETE"], endpoint="delete_public_link") # Added endpoint
 def delete_public_link(fname):
     global public_links
     public_links = load_json(LINKS_FILE)
@@ -252,7 +248,7 @@ def delete_public_link(fname):
         return jsonify({"status": "ok", "message": "Link removed"})
     return jsonify({"status": "fail", "error": "No public link found"}), 404
 
-@app.route("/public/<token>")
+@app.route("/public/<token>", endpoint="serve_public_file") # Added endpoint
 def serve_public_file(token):
     public_links = load_json(LINKS_FILE)
     fname = public_links.get(token)
@@ -261,7 +257,7 @@ def serve_public_file(token):
     return send_from_directory(RECDIR, fname)
 
 
-@app.route("/send_email", methods=["POST"])
+@app.route("/send_email", methods=["POST"], endpoint="send_email_route") # Added endpoint
 def send_email():
     data = request.get_json()
     # Check if mail is configured before trying to send
@@ -281,7 +277,7 @@ def send_email():
         app.logger.error(f"Mail sending failed: {e}")
         return jsonify({"status": "fail", "error": "Could not send the email."}), 500
 
-@app.route("/debug/files")
+@app.route("/debug/files", endpoint="list_debug_files") # Added endpoint
 def list_files():
     # It's better to check for a specific debug flag than just app.debug
     if os.getenv("FLASK_ENV") == "development":
@@ -291,7 +287,7 @@ def list_files():
                f"<h2>MP4 Files ({MP4_DIR}):</h2><pre>{'<br>'.join(mp4_files)}</pre>"
     return "Not available in production", 404
 
-@app.route("/delete/<filename>", methods=["POST"])
+@app.route("/delete/<filename>", methods=["POST"], endpoint="delete_file_route") # Added endpoint
 def delete_file(filename):
     # Security: Ensure filename is safe and doesn't traverse directories
     if ".." in filename or filename.startswith("/"):
@@ -333,7 +329,7 @@ def delete_file(filename):
         return jsonify({"status": "fail", "error": "Could not delete the file."}), 500
 
 # NEW ROUTE FOR CONTACT FORM
-@app.route("/contact_us", methods=["POST"])
+@app.route("/contact_us", methods=["POST"], endpoint="contact_us_route") # Added endpoint
 def contact_us():
     # Ensure mail is configured before trying to send
     if not app.config.get("MAIL_USERNAME") or not app.config.get("MAIL_PASSWORD"):
