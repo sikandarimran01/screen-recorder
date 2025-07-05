@@ -1,0 +1,4 @@
+# render.yaml
+build:
+  aptPackages:
+    - ffmpeg
