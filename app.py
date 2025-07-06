@@ -195,15 +195,17 @@ def download(fname):
 
 
 # NEW ROUTE: Download as MP4
+# NEW ROUTE: Download as MP4
 @app.route("/download/mp4/<filename>", endpoint="download_mp4")
 def download_mp4(filename):
-    app.logger.info(f"DEBUG: Entering download_mp4 function for {filename}") # <--- THIS IS THE NEW LINE TO ADD
+    app.logger.info(f"DEBUG: Entering download_mp4 function for {filename}")
 
     if not filename.endswith(".webm"):
         return jsonify({"status": "fail", "error": "Invalid file type. Only .webm allowed for conversion input."}), 400
 
     webm_path = os.path.join(RECDIR, filename)
     if not os.path.exists(webm_path):
+        app.logger.error(f"❌ Original WEBM file not found at path: {webm_path}") # Added logging for this case
         return jsonify({"status": "fail", "error": "Original WEBM file not found"}), 404
 
     mp4_filename = filename.replace(".webm", ".mp4")
@@ -230,15 +232,16 @@ def download_mp4(filename):
         mp4_path,             # Output MP4 file
     ]
 
-    # --- NEW DEBUGGING LOGGING ---
+    # --- DEBUGGING LOGGING ---
     app.logger.info(f"DEBUG: FFmpeg command list: {ffmpeg_cmd}")
     app.logger.info(f"DEBUG: Checking FFMPEG_PATH existence: {os.path.exists(FFMPEG_PATH)}")
     # --- END NEW DEBUGGING LOGGING ---
 
     try:
-        result = subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True)
+        # --- MODIFIED: Added timeout=60 ---
+        result = subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True, timeout=60)
 
-        # --- NEW DEBUGGING LOGGING ---
+        # --- DEBUGGING LOGGING ---
         app.logger.info(f"DEBUG: subprocess.run completed. Return code: {result.returncode}")
         # --- END NEW DEBUGGING LOGGING ---
 
@@ -258,6 +261,14 @@ def download_mp4(filename):
         # Send the newly converted MP4 file for download
         app.logger.info(f"✅ Successfully converted and serving new MP4: {mp4_filename}")
         return send_from_directory(MP4_DIR, mp4_filename, as_attachment=True, mimetype="video/mp4")
+
+    # --- NEW: Added TimeoutExpired Exception Handling ---
+    except subprocess.TimeoutExpired as e:
+        # This block will catch if FFmpeg takes too long to respond
+        app.logger.error(f"❌ FFmpeg conversion timed out for {filename} after {e.timeout} seconds. Stderr from partial output: {e.stderr}")
+        return jsonify({"status": "fail", "error": f"Video conversion timed out ({e.timeout}s). Try a shorter clip or simpler conversion. Server might be under heavy load or resource constraints."}), 500
+    # --- END NEW TimeoutExpired Exception Handling ---
+
     except subprocess.CalledProcessError as e:
         # If FFmpeg returns a non-zero exit code
         app.logger.error(f"❌ FFmpeg conversion failed for {filename} with error code {e.returncode}:\n{e.stderr}")
