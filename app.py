@@ -28,6 +28,17 @@ TOKEN_EXPIRY_SECONDS = 15 * 60
 mail = Mail(app)
 RECDIR  = "/mnt/recordings"
 MP4_DIR = os.path.join(RECDIR, "mp4_converted") # New directory for MP4s
+# --- FFmpeg Configuration ---
+# IMPORTANT: This path must exactly match the folder name you saw on Render shell.
+# Based on your logs, 'ffmpeg-7.0.2-amd64-static' is the correct folder name.
+FFMPEG_DIR = "/mnt/recordings/ffmpeg-7.0.2-amd64-static"
+FFMPEG_PATH = os.path.join(FFMPEG_DIR, "ffmpeg")
+
+# Optional: Add a check to ensure FFmpeg path is valid (good for debugging)
+if not os.path.exists(FFMPEG_PATH):
+    app.logger.error(f"FATAL ERROR: FFmpeg executable not found at '{FFMPEG_PATH}'. Please verify the path and installation steps.")
+    # In a real app, you might want to stop startup or disable features here.
+    # For now, it will just log the error.
 
 os.makedirs(RECDIR, exist_ok=True)
 os.makedirs(MP4_DIR, exist_ok=True) # Ensure MP4 directory exists
@@ -131,13 +142,12 @@ def clip(orig):
     duration = end - start
 
     cmd = [
-        "ffmpeg", "-hide_banner", "-loglevel", "error",
+        FFMPEG_PATH, "-hide_banner", "-loglevel", "error",
         "-ss", str(start), "-t", str(duration), "-i", in_path,
         "-c:v", "libvpx-vp9", "-b:v", "1M",
         "-c:a", "libopus", "-b:a", "128k",
         "-y", out_path
     ]
-
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
         token = request.cookies.get("magic_token")
@@ -180,7 +190,7 @@ def download_mp4(filename):
     # If it doesn't exist or is empty, attempt conversion
     app.logger.info(f"Attempting to convert {filename} to MP4...")
     ffmpeg_cmd = [
-        "ffmpeg",
+        FFMPEG_PATH,
         "-y",                 # Overwrite output file without asking
         "-i", webm_path,      # Input WEBM file
         "-c:v", "libx264",    # H.264 video codec
