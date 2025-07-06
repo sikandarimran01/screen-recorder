@@ -182,15 +182,15 @@ def download_mp4(filename):
     mp4_path = os.path.join(MP4_DIR, mp4_filename)
 
     # Check if MP4 already exists
-    if os.path.exists(mp4_path) and os.path.getsize(mp4_path) > 0: # Added size check here too
-        # If it exists and is not empty, send it directly
+    if os.path.exists(mp4_path) and os.path.getsize(mp4_path) > 0:
         app.logger.info(f"Serving existing MP4: {mp4_filename}")
         return send_from_directory(MP4_DIR, mp4_filename, as_attachment=True, mimetype="video/mp4")
-    
+
     # If it doesn't exist or is empty, attempt conversion
     app.logger.info(f"Attempting to convert {filename} to MP4...")
+
     ffmpeg_cmd = [
-        FFMPEG_PATH,
+        FFMPEG_PATH,          # Should now be correctly defined
         "-y",                 # Overwrite output file without asking
         "-i", webm_path,      # Input WEBM file
         "-c:v", "libx264",    # H.264 video codec
@@ -200,13 +200,24 @@ def download_mp4(filename):
         "-b:a", "128k",       # Audio bitrate
         mp4_path,             # Output MP4 file
     ]
+
+    # --- NEW DEBUGGING LOGGING ---
+    app.logger.info(f"DEBUG: FFmpeg command list: {ffmpeg_cmd}")
+    app.logger.info(f"DEBUG: Checking FFMPEG_PATH existence: {os.path.exists(FFMPEG_PATH)}")
+    # --- END NEW DEBUGGING LOGGING ---
+
     try:
         result = subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True)
+
+        # --- NEW DEBUGGING LOGGING ---
+        app.logger.info(f"DEBUG: subprocess.run completed. Return code: {result.returncode}")
+        # --- END NEW DEBUGGING LOGGING ---
+
         # Log FFmpeg's standard output and error (even on success, for debugging)
         app.logger.info(f"✅ FFmpeg stdout for {filename}:\n{result.stdout}")
         if result.stderr:
             app.logger.warning(f"⚠️ FFmpeg stderr (might be warnings) for {filename}:\n{result.stderr}")
-        
+
         # ✅ Check for empty MP4 file AFTER conversion
         if not os.path.exists(mp4_path) or os.path.getsize(mp4_path) == 0:
             app.logger.error(f"❌ Converted MP4 is 0 bytes or missing after conversion: {mp4_path}")
@@ -224,7 +235,7 @@ def download_mp4(filename):
         return jsonify({"status": "fail", "error": f"Video conversion failed: {e.stderr}"}), 500
     except FileNotFoundError:
         # This specifically catches if 'ffmpeg' command itself is not found
-        app.logger.error(f"❌ FFmpeg command not found. Ensure FFmpeg is installed on the server.")
+        app.logger.error(f"❌ FFmpeg command not found. Ensure FFmpeg is installed on the server at {FFMPEG_PATH}.")
         return jsonify({"status": "fail", "error": "Server error: FFmpeg not found for video conversion."}), 500
     except Exception as e:
         # Catch any other unexpected errors during the process
