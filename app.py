@@ -7,6 +7,8 @@ from flask import (
 from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
+print("DEBUG: app.py is being loaded!") # <--- ADD THIS LINE HERE
+
 load_dotenv() 
 
 app = Flask(__name__)
