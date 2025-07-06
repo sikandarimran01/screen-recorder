@@ -170,9 +170,13 @@ def download(fname):
     # This is the default WEBM download
     return send_from_directory(RECDIR, fname, as_attachment=True, mimetype="video/webm")
 
+
+
 # NEW ROUTE: Download as MP4
 @app.route("/download/mp4/<filename>", endpoint="download_mp4")
 def download_mp4(filename):
+    app.logger.info(f"DEBUG: Entering download_mp4 function for {filename}") # <--- THIS IS THE NEW LINE TO ADD
+
     if not filename.endswith(".webm"):
         return jsonify({"status": "fail", "error": "Invalid file type. Only .webm allowed for conversion input."}), 400
 
@@ -182,6 +186,7 @@ def download_mp4(filename):
 
     mp4_filename = filename.replace(".webm", ".mp4")
     mp4_path = os.path.join(MP4_DIR, mp4_filename)
+
 
     # Check if MP4 already exists
     if os.path.exists(mp4_path) and os.path.getsize(mp4_path) > 0:
