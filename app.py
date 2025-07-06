@@ -13,6 +13,28 @@ load_dotenv()
 
 app = Flask(__name__)
 
+app = Flask(__name__)
+
+# --- NEW: Explicit Logging Configuration ---
+import logging
+# Set logging level for the application
+app.logger.setLevel(logging.INFO)
+# Create a handler to write logs to stdout
+handler = logging.StreamHandler()
+handler.setLevel(logging.INFO)
+# Define a formatter for the log messages
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+# Add the handler to the app's logger if not already present
+if not app.logger.handlers:
+    app.logger.addHandler(handler)
+# --- END NEW Logging Configuration ---
+
+app.config.update(
+    MAIL_SERVER="smtp.gmail.com",
+    # ... rest of your config ...
+)
+
 # --- Configuration ---
 app.config.update(
     MAIL_SERVER="smtp.gmail.com",
