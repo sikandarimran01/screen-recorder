@@ -222,18 +222,17 @@ def download_mp4(filename):
     app.logger.info(f"Attempting to convert {filename} to MP4...")
 
     ffmpeg_cmd = [
-        FFMPEG_PATH,          # Should now be correctly defined
-        "-y",                 # Overwrite output file without asking
-        "-i", webm_path,      # Input WEBM file
-        # --- MODIFIED FFmpeg arguments for lower resource usage ---
-        "-c:v", "libx264",    # H.264 video codec
-        "-preset", "ultrafast", # Changed from 'fast' to 'ultrafast'
-        "-crf", "28",         # Changed from '23' to '28'
-        "-c:a", "aac",        # AAC audio codec
-        "-b:a", "64k",        # Changed from '128k' to '64k'
-        # --- END MODIFIED FFmpeg arguments ---
-        mp4_path,             # Output MP4 file
-    ]
+    FFMPEG_PATH,
+    "-y",                 # Overwrite output file without asking
+    "-i", webm_path,      # Input WEBM file
+    "-r", "30",           # <--- ADD THIS LINE: Force output framerate to 30 FPS
+    "-c:v", "libx264",
+    "-preset", "ultrafast",
+    "-crf", "28",
+    "-c:a", "aac",
+    "-b:a", "64k",
+    mp4_path,
+]
 
     # --- DEBUGGING LOGGING (keep these) ---
     app.logger.info(f"DEBUG: FFmpeg command list: {ffmpeg_cmd}")
