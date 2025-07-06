@@ -14,6 +14,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
   // Helper to trigger file download from an API response (where backend sends file)
+  // This helper is not directly used for the MP4 download now due to API error handling strategy
   const downloadFile = (url, filename) => {
     const a = document.createElement('a');
     a.href = url;
@@ -209,6 +210,14 @@ document.addEventListener("DOMContentLoaded", () => {
   sessionBtn?.addEventListener("click", () => { filesPanel.classList.toggle("hidden"); filesPanel.scrollIntoView({ behavior: 'smooth' }); });
   forgetBtn?.addEventListener("click", () => forgetSessionModal?.showModal());
 
+  // --- Helper to reset button state ---
+  const resetButton = (btn, originalContent) => {
+    if (btn) { // Check if button element exists
+        btn.disabled = false;
+        btn.innerHTML = originalContent;
+    }
+  };
+
   actionsPanel.addEventListener("click", async (e) => {
     const button = e.target.closest("button[data-action]") || e.target.closest("a[data-action]");
     if (!button || !currentFile) return;
@@ -216,39 +225,53 @@ document.addEventListener("DOMContentLoaded", () => {
     
     switch (action) {
       case "clip": setupTrimSlider(); break;
+      
       case "download-webm":
-          // This action is handled by the <a> tag's default download attribute.
-          // No explicit JS needed here, but the data-action is useful for consistency.
+          const webmButton = button;
+          const originalWebmButtonContent = webmButton.innerHTML; // Store original content
+
+          // Disable the link visually (it's an <a> tag, but still useful for feedback)
+          // For <a> tags, the 'download' attribute handles the download.
+          // We show a spinner for a brief moment as an acknowledgment.
+          webmButton.classList.add('disabled-link'); // Add a class for styling disabled <a>
+          webmButton.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Downloading...`;
+
+          setTimeout(() => {
+              resetButton(webmButton, originalWebmButtonContent);
+              webmButton.classList.remove('disabled-link'); // Remove disabled class
+          }, 2000); // Show spinner for 2 seconds
+
+          // IMPORTANT: Do NOT e.preventDefault() here for <a> tags, as it stops the download.
           break;
+
       case "download-mp4":
-          const originalButtonText = button.innerHTML;
-          button.disabled = true;
-          button.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Converting...`;
+          const mp4Button = button;
+          const originalMp4ButtonContent = mp4Button.innerHTML; // Store original content
+
+          mp4Button.disabled = true;
+          mp4Button.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Converting...`;
           statusMsg.textContent = "⏳ Converting to MP4. This might take a moment...";
 
           try {
-              // We're essentially making a request that will trigger a file download.
-              // fetch() is not ideal for binary downloads when you want to trigger a save dialog.
-              // Instead, we'll just redirect the browser to the download URL.
-              const mp4Filename = currentFile.replace('.webm', '.mp4');
               const downloadUrl = `/download/mp4/${currentFile}`;
-              
-              // Simulate a click on an invisible link to trigger download, 
-              // as the server directly sends the file, not JSON.
-              const tempLink = document.createElement('a');
-              tempLink.href = downloadUrl;
-              tempLink.download = mp4Filename; // Suggest the filename
-              document.body.appendChild(tempLink);
-              tempLink.click();
-              document.body.removeChild(tempLink);
+              // Make a fetch request to check server's response (for errors)
+              const response = await fetch(downloadUrl, { method: 'GET' });
 
-              statusMsg.textContent = `✅ MP4 conversion started! Check your downloads.`;
+              if (response.ok) {
+                  // If OK, trigger the actual file download by redirecting the browser
+                  window.location.href = downloadUrl;
+                  statusMsg.textContent = `✅ MP4 conversion/download started! Check your downloads.`;
+              } else {
+                  // If not OK, parse JSON error from Flask
+                  const errorData = await response.json();
+                  statusMsg.textContent = `❌ MP4 conversion failed: ${errorData.error || 'Unknown error'}`;
+                  console.error("MP4 conversion server error:", errorData.error);
+              }
           } catch (error) {
-              console.error("MP4 conversion request failed:", error);
-              statusMsg.textContent = `❌ MP4 conversion failed. Try again.`;
+              console.error("MP4 conversion request failed (network/parsing error):", error);
+              statusMsg.textContent = `❌ MP4 conversion request failed. Please check network.`;
           } finally {
-              button.disabled = false;
-              button.innerHTML = originalButtonText;
+              resetButton(mp4Button, originalMp4ButtonContent); // Use helper to reset
               setTimeout(() => statusMsg.textContent = '', 5000); // Clear message
           }
           break;
