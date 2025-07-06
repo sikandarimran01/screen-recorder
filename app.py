@@ -218,28 +218,33 @@ def download_mp4(filename):
         return send_from_directory(MP4_DIR, mp4_filename, as_attachment=True, mimetype="video/mp4")
 
     # If it doesn't exist or is empty, attempt conversion
+        # If it doesn't exist or is empty, attempt conversion
     app.logger.info(f"Attempting to convert {filename} to MP4...")
 
     ffmpeg_cmd = [
         FFMPEG_PATH,          # Should now be correctly defined
         "-y",                 # Overwrite output file without asking
         "-i", webm_path,      # Input WEBM file
+        # --- MODIFIED FFmpeg arguments for lower resource usage ---
         "-c:v", "libx264",    # H.264 video codec
-        "-preset", "fast",    # Conversion speed/quality trade-off
-        "-crf", "23",         # Constant Rate Factor (quality setting, 0-51, lower is better)
+        "-preset", "ultrafast", # Changed from 'fast' to 'ultrafast'
+        "-crf", "28",         # Changed from '23' to '28'
         "-c:a", "aac",        # AAC audio codec
-        "-b:a", "128k",       # Audio bitrate
+        "-b:a", "64k",        # Changed from '128k' to '64k'
+        # --- END MODIFIED FFmpeg arguments ---
         mp4_path,             # Output MP4 file
     ]
 
-    # --- DEBUGGING LOGGING ---
+    # --- DEBUGGING LOGGING (keep these) ---
     app.logger.info(f"DEBUG: FFmpeg command list: {ffmpeg_cmd}")
     app.logger.info(f"DEBUG: Checking FFMPEG_PATH existence: {os.path.exists(FFMPEG_PATH)}")
     # --- END NEW DEBUGGING LOGGING ---
 
     try:
-        # --- MODIFIED: Added timeout=60 ---
+        # --- MODIFIED: Added timeout=60 (this part was already there from last update) ---
         result = subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True, timeout=60)
+
+        # ... rest of the try-except blocks are the same ...
 
         # --- DEBUGGING LOGGING ---
         app.logger.info(f"DEBUG: subprocess.run completed. Return code: {result.returncode}")
