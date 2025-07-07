@@ -1,5 +1,5 @@
 import os, datetime, subprocess, json, random, string, uuid
-from dotenv import load_dotenv 
+from dotenv import load_dotenv
 from flask import (
     Flask, render_template, request, jsonify,
     send_from_directory, make_response
@@ -7,13 +7,16 @@ from flask import (
 from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
-print("DEBUG: app.py is being loaded!") # <--- ADD THIS LINE HERE
+# NEW: Import DEVNULL
+from subprocess import DEVNULL # <--- ADD THIS LINE HERE
 
-load_dotenv() 
+print("DEBUG: app.py is being loaded!")
+
+load_dotenv()
 
 app = Flask(__name__)
 
-app = Flask(__name__)
+# Removed duplicate app = Flask(__name__)
 
 # --- NEW: Explicit Logging Configuration ---
 import logging
@@ -29,11 +32,6 @@ handler.setFormatter(formatter)
 if not app.logger.handlers:
     app.logger.addHandler(handler)
 # --- END NEW Logging Configuration ---
-
-app.config.update(
-    MAIL_SERVER="smtp.gmail.com",
-    # ... rest of your config ...
-)
 
 # --- Configuration ---
 app.config.update(
@@ -53,8 +51,6 @@ mail = Mail(app)
 RECDIR  = "/mnt/recordings"
 MP4_DIR = os.path.join(RECDIR, "mp4_converted") # New directory for MP4s
 # --- FFmpeg Configuration ---
-# IMPORTANT: This path must exactly match the folder name you saw on Render shell.
-# Based on your logs, 'ffmpeg-7.0.2-amd64-static' is the correct folder name.
 FFMPEG_DIR = "/mnt/recordings/ffmpeg-7.0.2-amd64-static"
 FFMPEG_PATH = os.path.join(FFMPEG_DIR, "ffmpeg")
 
@@ -62,7 +58,6 @@ FFMPEG_PATH = os.path.join(FFMPEG_DIR, "ffmpeg")
 if not os.path.exists(FFMPEG_PATH):
     app.logger.error(f"FATAL ERROR: FFmpeg executable not found at '{FFMPEG_PATH}'. Please verify the path and installation steps.")
     # In a real app, you might want to stop startup or disable features here.
-    # For now, it will just log the error.
 
 os.makedirs(RECDIR, exist_ok=True)
 os.makedirs(MP4_DIR, exist_ok=True) # Ensure MP4 directory exists
@@ -105,8 +100,11 @@ def upload():
     save_path = os.path.join(RECDIR, fname)
 
     try:
+        # Flask's video_file.save() method typically streams to disk for large files
+        # It's unlikely to buffer the entire file into RAM, so this part is usually fine.
         video_file.save(save_path)
     except Exception as e:
+        app.logger.error(f"Error saving uploaded file {fname}: {e}") # Added logging
         return jsonify({"status": "fail", "error": str(e)}), 500
 
     token = request.cookies.get("magic_token")
@@ -166,21 +164,30 @@ def clip(orig):
     duration = end - start
 
     cmd = [
-        FFMPEG_PATH, "-hide_banner", "-loglevel", "error",
+        FFMPEG_PATH, "-hide_banner", "-loglevel", "error", # Use error loglevel to minimize output
         "-ss", str(start), "-t", str(duration), "-i", in_path,
         "-c:v", "libvpx-vp9", "-b:v", "1M",
         "-c:a", "libopus", "-b:a", "128k",
         "-y", out_path
     ]
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        # --- MODIFIED: Redirect output to DEVNULL ---
+        subprocess.run(cmd, check=True, stdout=DEVNULL, stderr=DEVNULL)
+        # --- END MODIFIED ---
         token = request.cookies.get("magic_token")
         if token and token in user_sessions:
             user_sessions[token].append(clip_name)
             save_json(user_sessions, SESSIONS_FILE)
         return jsonify({"status": "ok", "clip": clip_name})
     except subprocess.CalledProcessError as e:
+        app.logger.error(f"FFmpeg clipping failed for {orig} with error: {e.stderr}")
         return jsonify({"status": "fail", "error": e.stderr}), 500
+    except FileNotFoundError:
+        app.logger.error(f"FFmpeg command not found during clip operation. Path: {FFMPEG_PATH}")
+        return jsonify({"status": "fail", "error": "Server error: FFmpeg not found for clipping."}), 500
+    except Exception as e:
+        app.logger.error(f"Unexpected error during clipping for {orig}: {e}")
+        return jsonify({"status": "fail", "error": f"An unexpected error occurred during clipping: {str(e)}"}), 500
 
 @app.route("/recordings/<fname>", endpoint="get_recording_webm")
 def recordings(fname):
@@ -192,9 +199,6 @@ def download(fname):
     # This is the default WEBM download
     return send_from_directory(RECDIR, fname, as_attachment=True, mimetype="video/webm")
 
-
-
-# NEW ROUTE: Download as MP4
 # NEW ROUTE: Download as MP4
 @app.route("/download/mp4/<filename>", endpoint="download_mp4")
 def download_mp4(filename):
@@ -205,12 +209,11 @@ def download_mp4(filename):
 
     webm_path = os.path.join(RECDIR, filename)
     if not os.path.exists(webm_path):
-        app.logger.error(f"❌ Original WEBM file not found at path: {webm_path}") # Added logging for this case
+        app.logger.error(f"❌ Original WEBM file not found at path: {webm_path}")
         return jsonify({"status": "fail", "error": "Original WEBM file not found"}), 404
 
     mp4_filename = filename.replace(".webm", ".mp4")
     mp4_path = os.path.join(MP4_DIR, mp4_filename)
-
 
     # Check if MP4 already exists
     if os.path.exists(mp4_path) and os.path.getsize(mp4_path) > 0:
@@ -218,21 +221,20 @@ def download_mp4(filename):
         return send_from_directory(MP4_DIR, mp4_filename, as_attachment=True, mimetype="video/mp4")
 
     # If it doesn't exist or is empty, attempt conversion
-        # If it doesn't exist or is empty, attempt conversion
     app.logger.info(f"Attempting to convert {filename} to MP4...")
 
     ffmpeg_cmd = [
-    FFMPEG_PATH,
-    "-y",                 # Overwrite output file without asking
-    "-i", webm_path,      # Input WEBM file
-    "-r", "30",           # <--- ADD THIS LINE: Force output framerate to 30 FPS
-    "-c:v", "libx264",
-    "-preset", "ultrafast",
-    "-crf", "28",
-    "-c:a", "aac",
-    "-b:a", "64k",
-    mp4_path,
-]
+        FFMPEG_PATH,
+        "-y",                 # Overwrite output file without asking
+        "-i", webm_path,      # Input WEBM file
+        "-r", "30",           # Force output framerate to 30 FPS (can help stability)
+        "-c:v", "libx264",
+        "-preset", "ultrafast", # Good balance for speed/memory on constrained systems
+        "-crf", "28",         # Constant Rate Factor: Higher value means lower quality/smaller file
+        "-c:a", "aac",
+        "-b:a", "64k",
+        mp4_path,
+    ]
 
     # --- DEBUGGING LOGGING (keep these) ---
     app.logger.info(f"DEBUG: FFmpeg command list: {ffmpeg_cmd}")
@@ -240,20 +242,13 @@ def download_mp4(filename):
     # --- END NEW DEBUGGING LOGGING ---
 
     try:
-        # --- MODIFIED: Added timeout=60 (this part was already there from last update) ---
-        result = subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True, timeout=60)
+        # --- MODIFIED: Redirect output to DEVNULL ---
+        # No 'text=True' since output is discarded.
+        result = subprocess.run(ffmpeg_cmd, check=True, stdout=DEVNULL, stderr=DEVNULL, timeout=120) # Increased timeout to 120s
+        # --- END MODIFIED ---
 
-        # ... rest of the try-except blocks are the same ...
-
-        # --- DEBUGGING LOGGING ---
         app.logger.info(f"DEBUG: subprocess.run completed. Return code: {result.returncode}")
-        # --- END NEW DEBUGGING LOGGING ---
-
-        # Log FFmpeg's standard output and error (even on success, for debugging)
-        app.logger.info(f"✅ FFmpeg stdout for {filename}:\n{result.stdout}")
-        if result.stderr:
-            app.logger.warning(f"⚠️ FFmpeg stderr (might be warnings) for {filename}:\n{result.stderr}")
-
+        
         # ✅ Check for empty MP4 file AFTER conversion
         if not os.path.exists(mp4_path) or os.path.getsize(mp4_path) == 0:
             app.logger.error(f"❌ Converted MP4 is 0 bytes or missing after conversion: {mp4_path}")
@@ -268,21 +263,28 @@ def download_mp4(filename):
 
     # --- NEW: Added TimeoutExpired Exception Handling ---
     except subprocess.TimeoutExpired as e:
-        # This block will catch if FFmpeg takes too long to respond
-        app.logger.error(f"❌ FFmpeg conversion timed out for {filename} after {e.timeout} seconds. Stderr from partial output: {e.stderr}")
+        app.logger.error(f"❌ FFmpeg conversion timed out for {filename} after {e.timeout} seconds. Process might still be running or was killed.")
+        # If timeout, it's possible the file was partially created, so clean it up.
+        if os.path.exists(mp4_path):
+            os.remove(mp4_path)
+            app.logger.info(f"Cleaned up partial MP4 file due to timeout: {mp4_path}")
         return jsonify({"status": "fail", "error": f"Video conversion timed out ({e.timeout}s). Try a shorter clip or simpler conversion. Server might be under heavy load or resource constraints."}), 500
     # --- END NEW TimeoutExpired Exception Handling ---
 
     except subprocess.CalledProcessError as e:
-        # If FFmpeg returns a non-zero exit code
-        app.logger.error(f"❌ FFmpeg conversion failed for {filename} with error code {e.returncode}:\n{e.stderr}")
-        return jsonify({"status": "fail", "error": f"Video conversion failed: {e.stderr}"}), 500
+        # With stdout=DEVNULL, stderr=DEVNULL, you won't get e.stderr.
+        # So, for debugging, you might temporarily revert to capture_output=True or
+        # write stderr to a temporary file for analysis only if a problem occurs.
+        app.logger.error(f"❌ FFmpeg conversion failed for {filename} with error code {e.returncode}. (Output not captured for memory saving).")
+        # If conversion failed, it's possible the file was partially created, so clean it up.
+        if os.path.exists(mp4_path):
+            os.remove(mp4_path)
+            app.logger.info(f"Cleaned up partial MP4 file due to conversion error: {mp4_path}")
+        return jsonify({"status": "fail", "error": "Video conversion failed. Please try again with a shorter clip or different settings."}), 500
     except FileNotFoundError:
-        # This specifically catches if 'ffmpeg' command itself is not found
         app.logger.error(f"❌ FFmpeg command not found. Ensure FFmpeg is installed on the server at {FFMPEG_PATH}.")
         return jsonify({"status": "fail", "error": "Server error: FFmpeg not found for video conversion."}), 500
     except Exception as e:
-        # Catch any other unexpected errors during the process
         app.logger.error(f"❌ Unexpected error during conversion for {filename}: {e}")
         return jsonify({"status": "fail", "error": f"An unexpected error occurred during conversion: {str(e)}"}), 500
 
@@ -448,5 +450,4 @@ def contact_us():
 
 
 if __name__ == "__main__":
-    # The debug flag should ideally come from an environment variable
     app.run(debug=(os.getenv("FLASK_ENV") == "development"), port=5001)
