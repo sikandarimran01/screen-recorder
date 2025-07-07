@@ -530,7 +530,7 @@ dialog textarea:focus {
     width: 100%; 
     margin: 0.25rem 0;
   }
-  .back-btn { width: auto; }
+  .back-btn { width: aauto; }
   .device-selection {
     flex-direction: column;
     align-items: flex-start;
