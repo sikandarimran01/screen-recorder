@@ -104,6 +104,13 @@ a:hover { text-decoration: underline; }
 .btn.share  { background: var(--brand);   color: #fff; }
 .btn.cancel { background: #6c757d;      color: #fff; }
 .btn.warn { background: var(--warn); color: #000; }
+/* New small button style for webcam controls */
+.btn.btn-small {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+  border-radius: 5px;
+  margin: 0.1rem;
+}
 
 .btn:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-2px); }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
@@ -212,6 +219,111 @@ body.light #actionsPanel { background: #f8f9fa; }
 }
 /* +++ END: NEW Styles +++ */
 
+/* --- NEW: Webcam Capture Area Styles --- */
+#webcamCaptureArea {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-top: 1rem;
+  text-align: left;
+  background: var(--card-highlight-bg);
+}
+.device-selection {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem; /* Row gap, column gap */
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.device-selection label {
+  font-weight: 500;
+  color: var(--muted);
+}
+.device-selection select {
+  padding: 0.5rem 0.75rem;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 0.95rem;
+  cursor: pointer;
+  -webkit-appearance: none; /* Remove default arrow on WebKit browsers */
+  -moz-appearance: none;    /* Remove default arrow on Firefox */
+  appearance: none;         /* Remove default arrow */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%236c757d'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.7rem center;
+  background-size: 1em;
+  padding-right: 2.5rem; /* Make space for the custom arrow */
+}
+body.dark .device-selection select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23aaa'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+}
+
+
+.webcam-preview-container {
+  position: relative; /* Crucial for positioning the webcam preview and controls */
+  width: 100%;
+  padding-top: 56.25%; /* 16:9 aspect ratio (height / width * 100%) */
+  background: #000;
+  border-radius: var(--radius);
+  overflow: hidden; /* Ensure webcam doesn't spill out */
+  margin-bottom: 1rem;
+  border: 1px solid var(--border);
+}
+
+#webcamPreview {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* Ensure the screen recording fits the container */
+  z-index: 1; /* Screen video is background */
+}
+/* Webcam overlay specific styling */
+#webcamPreview.webcam-overlay {
+  position: absolute; /* Allows precise positioning */
+  object-fit: cover; /* Cover ensures webcam fills its own box */
+  border-radius: 8px; /* Slightly rounded corners for the overlay */
+  border: 3px solid var(--brand); /* Highlight the webcam feed */
+  z-index: 2; /* Webcam is foreground */
+  /* Default position and size (will be overridden by JS) */
+  width: 25%;
+  height: auto; /* Maintain aspect ratio */
+  bottom: 20px;
+  right: 20px;
+  transform: translate(0,0); /* Reset any transform to ease calculation */
+  cursor: grab; /* Indicate draggable */
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+#webcamPreview.webcam-overlay:active {
+  cursor: grabbing;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+}
+#webcamPreview.resizing {
+  cursor: se-resize; /* Cursor for resizing */
+}
+#webcamPreview.hidden-overlay {
+  display: none !important;
+}
+
+#webcamOverlayControls {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: var(--radius);
+  padding: 0.5rem 1rem;
+  display: flex;
+  gap: 0.5rem;
+  z-index: 3; /* Above webcam overlay */
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
 
 /* --- Panels & Dialogs --- */
 .panel, dialog {
@@ -328,7 +440,7 @@ dialog input {
 .panel-header h2 { margin: 0; font-size: 1.25rem; }
 .btn-close {
   background: none; border: none; font-size: 2rem;
-  font-weight: 300; color: var(--muted); cursor: pointer; line--height: 1;
+  font-weight: 300; color: var(--muted); cursor: pointer; line-height: 1; /* Fixed line--height */
 }
 .trim-slider-wrapper {
   display: flex; align-items: center; gap: 1rem; margin: 1rem 0;
@@ -360,17 +472,6 @@ dialog input {
 /* Mobile Warning Modal Specifics */
 #mobileWarningModal p { margin: 1rem 0; line-height: 1.6; }
 #mobileWarningModal strong { color: var(--brand); }
-
-/* --- Responsive Adjustments --- */
-@media (max-width: 640px) {
-  body { padding: 1rem; }
-  .card { padding: 4rem 1rem 1.5rem; }
-  .recorder-controls .btn, .session-controls .btn { 
-    width: 100%; 
-    margin: 0.25rem 0;
-  }
-  .back-btn { width: auto; }
-}
 
 /* --- NEW: Attractive Contact Form Modal Styles --- */
 dialog textarea {
@@ -420,4 +521,26 @@ dialog textarea:focus {
   display: block;
   color: var(--danger);
   background-color: rgba(220, 53, 69, 0.15);
+}
+
+@media (max-width: 640px) {
+  body { padding: 1rem; }
+  .card { padding: 4rem 1rem 1.5rem; }
+  .recorder-controls .btn, .session-controls .btn { 
+    width: 100%; 
+    margin: 0.25rem 0;
+  }
+  .back-btn { width: auto; }
+  .device-selection {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .device-selection label, .device-selection select {
+    width: 100%;
+  }
+  #webcamOverlayControls {
+    flex-wrap: wrap;
+    justify-content: center;
+    bottom: 5px; /* Adjust for smaller screens */
+  }
 }
