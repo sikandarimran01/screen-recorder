@@ -43,23 +43,22 @@
 }
 </script>
 
-
-  <!-- NEW: Structured Data (JSON-LD) for Site Logo -->
+<!-- Structured Data for WebSite and Publisher -->
 <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "WebSite",
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "GrabScreen",
+  "url": "https://www.grabscreen.com",
+  "publisher": {
+    "@type": "Organization",
     "name": "GrabScreen",
-    "url": "{{ request.url_root.rstrip('/') }}",
-    "publisher": {
-      "@type": "Organization",
-      "name": "GrabScreen",
-      "logo": {
-        "@type": "ImageObject",
-        "url": "{{ url_for('static', filename='logo.png', _external=True) }}"
-      }
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://www.grabscreen.com/static/logo.png"
     }
   }
+}
 </script>
 
 </head>
