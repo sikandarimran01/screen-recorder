@@ -363,6 +363,26 @@
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
+
+<!-- --- NEW: Analytics Helper Script --- -->
+<script>
+  /**
+   * A robust wrapper for sending events to Google Analytics.
+   * This function will be called by main.js after server interactions.
+   * @param {string} eventName - The name of the event (e.g., 'recording_completed').
+   * @param {object} [params={}] - Optional parameters for the event.
+   */
+  function trackGAEvent(eventName, params = {}) {
+    if (typeof gtag === 'function') {
+      console.log(`GA Event Fired: ${eventName}`, params); // For debugging purposes
+      gtag('event', eventName, params);
+    } else {
+      console.warn('gtag() function not found. Analytics event was not sent.');
+    }
+  }
+</script>
+<!-- --- END NEW --- -->
+
 <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
 <script>
   // Theme Toggler Script (no changes)
