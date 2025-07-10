@@ -16,6 +16,16 @@ document.addEventListener("DOMContentLoaded", () => {
   
   const apiFetch = (url, opts = {}) => fetch(url, opts);
   const fullUrl = (f) => `${location.origin}/recordings/${f}`;
+
+  // --- GA TRACKING ---
+  // A helper function to process server responses and fire Google Analytics events.
+  const handleGAResponse = (response) => {
+    if (response && response.ga_event) {
+      // The trackGAEvent function is defined globally in index.html
+      trackGAEvent(response.ga_event, response.ga_params || {});
+    }
+  };
+  // --- END GA TRACKING ---
   
   // --- All DOM Element References ---
   const recorderView = $("#recorderView"), privacyView = $("#privacyView"), contactView = $("#contactView");
@@ -422,6 +432,9 @@ document.addEventListener("DOMContentLoaded", () => {
         stopAllStreams(); 
         const res = await apiFetch("/upload", { method: "POST", body: fd }).then(r => r.json());
         if (res.status === "ok") {
+          // --- GA TRACKING ---
+          handleGAResponse(res); // Fire 'recording_completed' event
+          // --- END GA TRACKING ---
           statusMsg.textContent = `✅ Recording saved!`;
           addFileToGrid(res.filename);
           activateFile(res.filename);
@@ -470,6 +483,9 @@ document.addEventListener("DOMContentLoaded", () => {
               stopAllStreams(); 
               const res = await apiFetch("/upload", { method: "POST", body: fd }).then(r => r.json());
               if (res.status === "ok") {
+                  // --- GA TRACKING ---
+                  handleGAResponse(res); // Fire 'recording_completed' event
+                  // --- END GA TRACKING ---
                   statusMsg.textContent = `✅ Recording saved!`;
                   addFileToGrid(res.filename);
                   activateFile(res.filename);
@@ -519,6 +535,9 @@ document.addEventListener("DOMContentLoaded", () => {
         stopAllStreams(); 
         const res = await apiFetch("/upload", { method: "POST", body: fd }).then(r => r.json());
         if (res.status === "ok") {
+          // --- GA TRACKING ---
+          handleGAResponse(res); // Fire 'recording_completed' event
+          // --- END GA TRACKING ---
           statusMsg.textContent = `✅ Recording saved!`;
           addFileToGrid(res.filename);
           activateFile(res.filename);
@@ -697,8 +716,27 @@ document.addEventListener("DOMContentLoaded", () => {
               setTimeout(() => { if (statusMsg.textContent.includes('MP4')) statusMsg.textContent = ''; }, 6000);
           }
           break;
-      case "secure-link": { const r = await apiFetch(`/link/secure/${currentFile}`).then(r => r.json()); if (r.status === "ok") copy(r.url, button); break; }
-      case "public-link": { const r = await apiFetch(`/link/public/${currentFile}`).then(r => r.json()); if (r.status === "ok") { copy(r.url, button); button.innerHTML = `<i class="fa-solid fa-link"></i> Public Link Active`; } break; }
+      case "secure-link": {
+        const r = await apiFetch(`/link/secure/${currentFile}`).then(r => r.json());
+        if (r.status === "ok") {
+          // --- GA TRACKING ---
+          handleGAResponse(r);
+          // --- END GA TRACKING ---
+          copy(r.url, button);
+        }
+        break;
+      }
+      case "public-link": {
+        const r = await apiFetch(`/link/public/${currentFile}`).then(r => r.json());
+        if (r.status === "ok") {
+          // --- GA TRACKING ---
+          handleGAResponse(r);
+          // --- END GA TRACKING ---
+          copy(r.url, button);
+          button.innerHTML = `<i class="fa-solid fa-link"></i> Public Link Active`;
+        }
+        break;
+      }
       case "email": emailModal?.showModal(); break;
       case "delete":
         fileToDeleteEl.textContent = currentFile;
@@ -734,7 +772,12 @@ document.addEventListener("DOMContentLoaded", () => {
       const r = await apiFetch("/send_email", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ to, url: linkRes.url }) }).then(x => x.json());
       $("#emailStatus").textContent = r.status === "ok" ? "✅ Sent!" : "❌ " + (r.error || "Failed");
       btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send`;
-      if (r.status === "ok") setTimeout(() => { emailModal.close(); $("#emailStatus").textContent = ""; $("#emailTo").value = ""; }, 1500);
+      if (r.status === "ok") {
+        // --- GA TRACKING ---
+        handleGAResponse(r);
+        // --- END GA TRACKING ---
+        setTimeout(() => { emailModal.close(); $("#emailStatus").textContent = ""; $("#emailTo").value = ""; }, 1500);
+      }
   });
   
   deleteCancelBtn?.addEventListener("click", () => deleteModal.close());
