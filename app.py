@@ -107,8 +107,6 @@ user_sessions = load_json(SESSIONS_FILE)
 def index():
     return render_template("index.html", year=datetime.datetime.now().year)
 
-# In app.py
-
 @app.route("/upload", methods=["POST"])
 def upload():
     video_file = request.files.get("video")
@@ -119,8 +117,7 @@ def upload():
     save_path = os.path.join(RECDIR, fname)
 
     try:
-        # --- NEW: Memory-efficient streaming save ---
-        CHUNK_SIZE = 4096  # Process in 4KB chunks
+        CHUNK_SIZE = 4096
         with open(save_path, "wb") as f:
             while True:
                 chunk = video_file.stream.read(CHUNK_SIZE)
@@ -128,7 +125,6 @@ def upload():
                     break
                 f.write(chunk)
         app.logger.info(f"Successfully saved uploaded video to {save_path} by streaming.")
-        # --- END NEW ---
     except Exception as e:
         app.logger.error(f"Failed to save uploaded video file: {e}")
         return jsonify({"status": "fail", "error": str(e)}), 500
@@ -141,7 +137,15 @@ def upload():
     user_sessions[token].append(fname)
     save_json(user_sessions, SESSIONS_FILE)
 
-    response = jsonify({"status": "ok", "filename": fname})
+    # --- GA EVENT TRACKING ---
+    # Add a signal to the response for the front-end to fire the 'recording_completed' event.
+    response = jsonify({
+        "status": "ok", 
+        "filename": fname,
+        "ga_event": "recording_completed"
+    })
+    # --- END GA EVENT TRACKING ---
+    
     response.set_cookie("magic_token", token, max_age=365*24*60*60)
     return response
 
@@ -151,7 +155,6 @@ def session_files():
     if not token or token not in user_sessions:
         return jsonify({"status": "empty", "files": []})
     
-    # Ensure all files in the session actually exist on disk
     existing_files = [f for f in user_sessions.get(token, []) if os.path.exists(os.path.join(RECDIR, f))]
     if len(existing_files) != len(user_sessions.get(token, [])):
         user_sessions[token] = existing_files
@@ -197,7 +200,6 @@ def clip(orig):
         "-y", out_path
     ]
     try:
-        # For cross-platform, it's safer to rely on FFMPEG_PATH being an absolute path or in system PATH.
         subprocess.run(cmd, check=True, capture_output=True, text=True) 
         token = request.cookies.get("magic_token")
         if token and token in user_sessions:
@@ -216,12 +218,10 @@ def clip(orig):
 
 @app.route("/recordings/<fname>", endpoint="get_recording_webm")
 def recordings(fname):
-    # This serves WEBM files for preview and default download
     return send_from_directory(RECDIR, fname, mimetype="video/webm")
 
 @app.route("/download/<fname>", endpoint="download_webm")
 def download(fname):
-    # This is the default WEBM download
     return send_from_directory(RECDIR, fname, as_attachment=True, mimetype="video/webm")
 
 @app.route("/download/mp4/<filename>", endpoint="download_mp4")
@@ -239,7 +239,6 @@ def download_mp4(filename):
     mp4_filename = filename.replace(".webm", ".mp4")
     mp4_path = os.path.join(MP4_DIR, mp4_filename)
 
-    # Check if MP4 already exists and is not empty
     if os.path.exists(mp4_path) and os.path.getsize(mp4_path) > 0:
         app.logger.info(f"Serving existing MP4: {mp4_filename}")
         return send_from_directory(MP4_DIR, mp4_filename, as_attachment=True, mimetype="video/mp4")
@@ -247,23 +246,16 @@ def download_mp4(filename):
     app.logger.info(f"Attempting to convert {filename} to MP4...")
 
     ffmpeg_cmd = [
-        FFMPEG_PATH,
-        "-y",                 # Overwrite output file without asking
-        "-i", webm_path,      # Input WEBM file
-        "-r", "30",           # Force output framerate to 30 FPS
-        "-c:v", "libx264",
-        "-preset", "ultrafast", # Faster encoding, lower quality/larger file for quick conversions
-        "-crf", "28",         # Constant Rate Factor (0-51), higher means lower quality/smaller file
-        "-c:a", "aac",
-        "-b:a", "64k",
-        mp4_path,
+        FFMPEG_PATH, "-y", "-i", webm_path, "-r", "30",
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+        "-c:a", "aac", "-b:a", "64k", mp4_path,
     ]
 
     app.logger.info(f"DEBUG: FFmpeg command list: {ffmpeg_cmd}")
     app.logger.info(f"DEBUG: Checking FFMPEG_PATH existence: {os.path.exists(FFMPEG_PATH)}")
 
     try:
-        result = subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True, timeout=120) # Increased timeout to 120s
+        result = subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True, timeout=120)
 
         app.logger.info(f"DEBUG: subprocess.run completed. Return code: {result.returncode}")
         app.logger.info(f"✅ FFmpeg stdout for {filename}:\n{result.stdout}")
@@ -300,7 +292,16 @@ def generate_secure_link(fname):
 
     token = serializer.dumps(fname)
     url = request.url_root.rstrip("/") + "/secure/" + token
-    return jsonify({"status": "ok", "url": url})
+    
+    # --- GA EVENT TRACKING ---
+    # Add a signal for the front-end to fire the 'link_shared' event.
+    return jsonify({
+        "status": "ok", 
+        "url": url,
+        "ga_event": "link_shared",
+        "ga_params": {"method": "secure"} # Add extra detail for GA
+    })
+    # --- END GA EVENT TRACKING ---
 
 @app.route("/secure/<token>", endpoint="secure_download")
 def secure_download(token):
@@ -322,12 +323,28 @@ def get_or_create_public_link(fname):
     for token, f in public_links.items():
         if f == fname:
             url = request.url_root.rstrip("/") + "/public/" + token
-            return jsonify({"status": "ok", "url": url, "isNew": False})
+            # --- GA EVENT TRACKING ---
+            return jsonify({
+                "status": "ok", 
+                "url": url, 
+                "isNew": False,
+                "ga_event": "link_shared",
+                "ga_params": {"method": "public"}
+            })
+            # --- END GA EVENT TRACKING ---
 
     token = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
     public_links[token] = fname
     save_json(public_links, LINKS_FILE)
-    return jsonify({"status": "ok", "url": request.url_root.rstrip("/") + "/public/" + token, "isNew": True})
+    # --- GA EVENT TRACKING ---
+    return jsonify({
+        "status": "ok", 
+        "url": request.url_root.rstrip("/") + "/public/" + token, 
+        "isNew": True,
+        "ga_event": "link_shared",
+        "ga_params": {"method": "public"}
+    })
+    # --- END GA EVENT TRACKING ---
 
 @app.route("/link/public/<fname>", methods=["DELETE"], endpoint="delete_public_link")
 def delete_public_link(fname):
@@ -364,14 +381,19 @@ def send_email():
             body=f"Hi,\n\nHere is your recording:\n{data['url']}\n\nEnjoy!"
         )
         mail.send(msg)
-        return jsonify({"status": "ok"})
+        # --- GA EVENT TRACKING ---
+        return jsonify({
+            "status": "ok",
+            "ga_event": "link_shared",
+            "ga_params": {"method": "email"}
+        })
+        # --- END GA EVENT TRACKING ---
     except Exception as e:
         app.logger.error(f"Mail sending failed: {e}")
         return jsonify({"status": "fail", "error": "Could not send the email."}), 500
 
 @app.route("/debug/files", endpoint="list_debug_files")
 def list_files():
-    # Allow debug on Render for convenience if RENDER_EXTERNAL_URL is set
     if os.getenv("FLASK_ENV") == "development" or os.getenv("RENDER_EXTERNAL_URL"): 
         webm_files = sorted(os.listdir(RECDIR))
         mp4_files = sorted(os.listdir(MP4_DIR))
