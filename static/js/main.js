@@ -413,22 +413,30 @@ document.addEventListener("DOMContentLoaded", () => {
       mediaRecorder = new MediaRecorder(screenStream, { mimeType: "video/webm; codecs=vp8" });
       chunks = [];
       mediaRecorder.ondataavailable = e => chunks.push(e.data);
+
       mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: "video/webm" });
-        const fd = new FormData();
-        fd.append("video", blob, "recording.webm");
-        statusMsg.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Uploading & processing...`;
-        stopAllStreams(); 
-        const res = await apiFetch("/upload", { method: "POST", body: fd }).then(r => r.json());
-        if (res.status === "ok") {
-          statusMsg.textContent = `✅ Recording saved!`;
-          addFileToGrid(res.filename);
-          activateFile(res.filename);
-        } else {
-          statusMsg.textContent = "❌ Upload failed: " + res.error;
-        }
-        resetRecordingButtons(); 
+      const blob = new Blob(chunks, { type: "video/webm" });
+      const fd = new FormData();
+      fd.append("video", blob, "recording.webm");
+      statusMsg.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Uploading & processing...`;
+      stopAllStreams(); 
+      const res = await apiFetch("/upload", { method: "POST", body: fd }).then(r => r.json());
+      if (res.status === "ok") {
+    
+      statusMsg.innerHTML = `
+      ✅ Recording saved! 
+      <span style="display: block; font-size: 0.9em; opacity: 0.8; margin-top: 0.25em;">
+          (Files are automatically deleted after 1 hour)
+      </span>
+       `;
+      addFileToGrid(res.filename);
+      activateFile(res.filename);
+      } else {
+      statusMsg.textContent = "❌ Upload failed: " + res.error;
+      }
+      resetRecordingButtons(); 
       };
+
       mediaRecorder.start();
       screenStream.getVideoTracks()[0].onended = () => stopBtn.click(); 
       statusMsg.textContent = "🎬 Recording screen only…";
@@ -461,22 +469,29 @@ document.addEventListener("DOMContentLoaded", () => {
           mediaRecorder = new MediaRecorder(combinedStream, { mimeType: "video/webm; codecs=vp8" });
           chunks = [];
           mediaRecorder.ondataavailable = e => chunks.push(e.data);
-          mediaRecorder.onstop = async () => {
-              const blob = new Blob(chunks, { type: "video/webm" });
-              const fd = new FormData();
-              fd.append("video", blob, "recording.webm");
-              statusMsg.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Uploading & processing...`;
-              stopAllStreams(); 
-              const res = await apiFetch("/upload", { method: "POST", body: fd }).then(r => r.json());
-              if (res.status === "ok") {
-                  statusMsg.textContent = `✅ Recording saved!`;
-                  addFileToGrid(res.filename);
-                  activateFile(res.filename);
-              } else {
-                  statusMsg.textContent = "❌ Upload failed: " + res.error;
-              }
-              resetRecordingButtons(); 
-          };
+         
+         mediaRecorder.onstop = async () => {
+         const blob = new Blob(chunks, { type: "video/webm" });
+         const fd = new FormData();
+         fd.append("video", blob, "recording.webm");
+         statusMsg.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Uploading & processing...`;
+         stopAllStreams(); 
+         const res = await apiFetch("/upload", { method: "POST", body: fd }).then(r => r.json());
+         if (res.status === "ok") {
+         statusMsg.innerHTML = `
+           ✅ Recording saved! 
+          <span style="display: block; font-size: 0.9em; opacity: 0.8; margin-top: 0.25em;">
+              (Files are automatically deleted after 1 hour)
+          </span>
+        `;
+         addFileToGrid(res.filename);
+         activateFile(res.filename);
+         } else {
+         statusMsg.textContent = "❌ Upload failed: " + res.error;
+         }
+         resetRecordingButtons(); 
+         };
+
           mediaRecorder.start();
           statusMsg.textContent = "🎬 Recording screen + webcam…";
           screenStream.getVideoTracks()[0].onended = () => stopBtn.click();
@@ -510,22 +525,29 @@ document.addEventListener("DOMContentLoaded", () => {
       mediaRecorder = new MediaRecorder(webcamStream, { mimeType: "video/webm; codecs=vp8" });
       chunks = [];
       mediaRecorder.ondataavailable = e => chunks.push(e.data);
+
       mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: "video/webm" });
-        const fd = new FormData();
-        fd.append("video", blob, "recording.webm");
-        statusMsg.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Uploading & processing...`;
-        stopAllStreams(); 
-        const res = await apiFetch("/upload", { method: "POST", body: fd }).then(r => r.json());
-        if (res.status === "ok") {
-          statusMsg.textContent = `✅ Recording saved!`;
-          addFileToGrid(res.filename);
-          activateFile(res.filename);
-        } else {
-          statusMsg.textContent = "❌ Upload failed: " + res.error;
-        }
-        resetRecordingButtons(); 
+      const blob = new Blob(chunks, { type: "video/webm" });
+      const fd = new FormData();
+      fd.append("video", blob, "recording.webm");
+      statusMsg.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Uploading & processing...`;
+      stopAllStreams(); 
+      const res = await apiFetch("/upload", { method: "POST", body: fd }).then(r => r.json());
+      if (res.status === "ok") {
+         statusMsg.innerHTML = `
+      ✅ Recording saved! 
+       <span style="display: block; font-size: 0.9em; opacity: 0.8; margin-top: 0.25em;">
+          (Files are automatically deleted after 1 hour)
+       </span>
+     `;
+      addFileToGrid(res.filename);
+      activateFile(res.filename);
+      } else {
+      statusMsg.textContent = "❌ Upload failed: " + res.error;
+      }
+      resetRecordingButtons(); 
       };
+      
       mediaRecorder.start();
       statusMsg.textContent = "🎬 Recording webcam…";
       webcamStream.getTracks().forEach(track => { track.onended = () => stopBtn.click(); });
