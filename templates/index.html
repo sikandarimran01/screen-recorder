@@ -181,10 +181,6 @@
     
     <section id="filesPanel" class="hidden">
       <h2>Your Recordings</h2>
-     <p class="retention-notice">
-        <i class="fa-solid fa-info-circle"></i>
-        Please download your files. To keep this service free, recordings are automatically deleted after 1 hour.
-      </p>
       <div id="mediaGrid" class="grid-container"></div>
     </section>
   </div>
@@ -193,9 +189,7 @@
       <button class="btn back-btn"><i class="fa-solid fa-arrow-left"></i> Back to Recorder</button>
       <h1><i class="fa-solid fa-shield-halved"></i> Privacy Policy</h1>
       <p style="text-align: center; color: var(--muted);">Last Updated: May 2024</p>
-
       <p>Welcome to GrabScreen. We are committed to protecting your privacy. This Privacy Policy explains what information we collect, how we use it, and the controls you have over your data on this platform.</p>
-
       <h2>Information We Collect</h2>
       <ul>
           <li><strong>Screen Recordings:</strong> The video files (.webm) created from your screen share are uploaded and stored on our server so that you can access, trim, and share them.</li>
@@ -203,14 +197,12 @@
           <li><strong>Anonymous Session Cookie:</strong> We use a single, functional cookie (your "magic_token") to associate your recordings with your browser. This token is a random string of characters and contains no personal information. It is used solely to display your list of files on your return visits.</li>
           <li><strong>Email Addresses:</strong> We only collect an email address when you voluntarily provide it through the "Email" sharing feature. We do not store this email address after the email has been sent.</li>
       </ul>
-
       <h2>How We Use Your Information</h2>
       <ul>
           <li><strong>To Provide the Service:</strong> Your recordings are stored to allow you to view, download, or create clips from them.</li>
           <li><strong>To Maintain Your Session:</strong> The "magic_token" cookie ensures that when you revisit our site from the same browser, you see your own list of recordings.</li>
           <li><strong>To Fulfill Your Requests:</strong> When you use the "Email" feature, we use the provided email address to send a one-time email containing the link to your recording.</li>
       </ul>
-      
       <h2>Your Control and Data Rights</h2>
       <p>You have complete control over your recordings. Here’s how:</p>
       <ul>
@@ -219,10 +211,8 @@
           <li><strong><i class="fa-solid fa-globe"></i> Public Links:</strong> When you create a "Public Link", anyone with that link can view the recording. The link remains active until you delete the source file.</li>
           <li><strong><i class="fa-solid fa-lock"></i> Secure Links:</strong> "Secure Links" are temporary and expire after a short period (15 minutes). They are ideal for private, one-time sharing.</li>
       </ul>
-
       <h2>Third-Party Services</h2>
       <p>We use Google's SMTP server to send emails on your behalf. We also use public CDNs to load resources like fonts and scripts for better performance. These third parties have their own privacy policies, and we do not share your recording data with them beyond what is necessary to provide the service (e.g., sending an email link).</p>
-      
       <h2>Changes to This Policy</h2>
       <p>We may update this policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page.</p>
   </section>
@@ -230,13 +220,11 @@
       <button class="btn back-btn"><i class="fa-solid fa-arrow-left"></i> Back to Recorder</button>
       <h1><i class="fa-solid fa-paper-plane"></i> Get in Touch</h1>
       <p>Have a question, a suggestion, or need to report an issue? Please use the form below to send us a direct message.</p>
-
       <div style="margin: 2rem 0; text-align: center;">
           <button id="showContactModalBtn" class="btn share" style="font-size: 1.2rem; padding: 1rem 2rem;">
               <i class="fa-solid fa-envelope"></i> Open Contact Form
           </button>
       </div>
-
       <p>We do our best to respond to all inquiries within 48 business hours.</p>
   </section>
 
@@ -298,7 +286,6 @@
     <button id="contactCancelBtn" class="btn cancel" formmethod="dialog">Cancel</button>
   </dialog>
 
-  <!-- SCREEN-ONLY TIPS MODAL -->
   <dialog id="screenOnlyTipsModal">
     <h2><i class="fa-solid fa-circle-info"></i> Screen Recording Tips</h2>
     <p style="text-align: center; color: var(--muted); margin-bottom: 2rem;">
@@ -328,7 +315,6 @@
     <button class="btn cancel" style="width: 100%;" formmethod="dialog">Cancel</button>
   </dialog>
 
-  <!-- SCREEN + CAM TIPS MODAL -->
   <dialog id="combinedTipsModal">
     <h2><i class="fa-solid fa-circle-info"></i> Screen + Cam Recording Tips</h2>
      <p style="text-align: center; color: var(--muted); margin-bottom: 2rem;">
@@ -353,7 +339,6 @@
     <button class="btn cancel" style="width: 100%;" formmethod="dialog">Cancel</button>
   </dialog>
 
-  <!-- NEW: FEEDBACK MODAL -->
   <dialog id="feedbackModal">
     <h2>Quick Question!</h2>
     <p>To help us improve GrabScreen, how are you using this recording?</p>
@@ -376,9 +361,29 @@
     </button>
   </dialog>
 
+  <dialog id="proWaitlistModal">
+    <h2>✨ Coming Soon: GrabScreen Pro!</h2>
+    <p>We're building powerful features for our most active users. Get notified when we launch and receive a <strong>50% discount</strong>.</p>
+    <div class="pro-features-list">
+      <p><i class="fa-solid fa-check-circle"></i> <strong>Long-Term Storage:</strong> Keep your videos for more than 24 hours.</p>
+      <p><i class="fa-solid fa-check-circle"></i> <strong>1080p HD Quality:</strong> Record and export in high definition.</p>
+      <p><i class="fa-solid fa-check-circle"></i> <strong>Team Features & Custom Branding</strong></p>
+    </div>
+    <label for="proEmailInput">Your Email:</label>
+    <input id="proEmailInput" type="email" placeholder="you@example.com" required />
+    <div id="proWaitlistStatus" style="margin-top: 0.5rem; min-height: 1.2em;"></div>
+    <button id="proWaitlistSubmitBtn" class="btn share" style="width: 100%; margin-top: 1rem;">
+      <i class="fa-solid fa-paper-plane"></i> Notify Me When It's Ready
+    </button>
+    <button id="proWaitlistCloseBtn" class="btn cancel" style="width: 100%;" formmethod="dialog">
+      Maybe later
+    </button>
+  </dialog>
+
   <footer class="site-footer">
     <p>© {{ year }} GrabScreen. All rights reserved.</p>
     <p>
+      <a href="#" id="showProWaitlistLink"><strong>✨ Get Pro</strong></a> | 
       <a href="#" id="showPrivacyLink">Privacy Policy</a> | 
       <a href="#" id="showContactLink">Contact</a>
     </p>
