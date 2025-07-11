@@ -104,6 +104,7 @@ elif not os.path.isabs(FFMPEG_PATH):
 
 LINKS_FILE = "public_links.json"
 SESSIONS_FILE = "user_sessions.json"
+PRO_WAITLIST_FILE = "pro_waitlist.txt" 
 
 # --- Helper Functions ---
 def load_json(file_path):
@@ -504,7 +505,34 @@ def contact_us():
         app.logger.error(f"Contact form mail sending failed: {e}")
         return jsonify({"status": "fail", "error": "Sorry, an error occurred and the message could not be sent."}), 500
 
+# ... (end of the /contact_us route) ...
+        return jsonify({"status": "fail", "error": "Sorry, an error occurred and the message could not be sent."}), 500
 
+#
+# --- ADD THIS ENTIRE NEW ROUTE ---
+#
+@app.route("/pro-waitlist", methods=["POST"])
+def pro_waitlist():
+    data = request.get_json()
+    if not data:
+        return jsonify({"status": "fail", "error": "Invalid request format."}), 400
+
+    email = data.get("email")
+
+    if not email or "@" not in email or "." not in email:
+        return jsonify({"status": "fail", "error": "Invalid email address provided."}), 400
+
+    try:
+        # Append the email and current timestamp to a simple text file.
+        # Each email will be on a new line.
+        with open(PRO_WAITLIST_FILE, "a") as f:
+            f.write(f"{datetime.datetime.now().isoformat()} - {email}\n")
+        
+        app.logger.info(f"New Pro Waitlist signup: {email}")
+        return jsonify({"status": "ok", "message": "Email added to waitlist."})
+    except Exception as e:
+        app.logger.error(f"Failed to write to pro waitlist file: {e}")
+        return jsonify({"status": "fail", "error": "Could not save email due to a server error."}), 500
 
 if __name__ == "__main__":
     # This allows us to run specific functions from the command line
