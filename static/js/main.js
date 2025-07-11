@@ -41,11 +41,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const moveWebcamOverlayBtn = $("#moveWebcamOverlay");
   const resizeWebcamOverlayBtn = $("#resizeWebcamOverlay");
 
-  // UPDATED: Specific Modal References
+  // Specific Modal References
   const screenOnlyTipsModal = $("#screenOnlyTipsModal");
   const proceedScreenOnlyBtn = $("#proceedScreenOnlyBtn");
   const combinedTipsModal = $("#combinedTipsModal");
   const proceedCombinedBtn = $("#proceedCombinedBtn");
+  const feedbackModal = $("#feedbackModal");
+  const feedbackOptions = $("#feedbackOptions");
 
   // --- App State ---
   let mediaRecorder, chunks = [], currentFile = null, trimSlider = null;
@@ -646,6 +648,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  const showFeedbackModalIfNeeded = () => {
+    if (!localStorage.getItem('hasGivenFeedback')) {
+      setTimeout(() => {
+        feedbackModal?.showModal();
+      }, 2000);
+    }
+  };
+
   actionsPanel.addEventListener("click", async (e) => {
     const button = e.target.closest("button[data-action]") || e.target.closest("a[data-action]");
     if (!button || !currentFile) return;
@@ -654,14 +664,7 @@ document.addEventListener("DOMContentLoaded", () => {
     switch (action) {
       case "clip": setupTrimSlider(); break;
       case "download-webm":
-          const webmButton = button;
-          const originalWebmButtonContent = webmButton.innerHTML; 
-          webmButton.classList.add('disabled-link'); 
-          webmButton.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Preparing...`;
-          setTimeout(() => {
-              resetButton(webmButton, originalWebmButtonContent);
-              webmButton.classList.remove('disabled-link'); 
-          }, 2000); 
+          showFeedbackModalIfNeeded();
           break;
       case "download-mp4":
           const mp4Button = button;
@@ -684,10 +687,10 @@ document.addEventListener("DOMContentLoaded", () => {
                   window.URL.revokeObjectURL(url);
                   a.remove();
                   statusMsg.textContent = `✅ MP4 conversion complete! Check your downloads.`;
+                  showFeedbackModalIfNeeded();
               } else {
                   const errorData = await response.json();
                   statusMsg.textContent = `❌ MP4 conversion failed: ${errorData.error || 'Unknown error'}`;
-                  console.error("MP4 conversion server error:", errorData.error);
               }
           } catch (error) {
               console.error("MP4 conversion request failed:", error);
@@ -825,6 +828,36 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
   $("#mobileWarningClose")?.addEventListener("click", () => { $("#mobileWarningModal")?.close(); });
+
+  // NEW: Feedback Modal Logic
+  feedbackOptions?.addEventListener('click', (e) => {
+    const button = e.target.closest('button[data-feedback]');
+    if (!button) return;
+
+    const feedbackType = button.dataset.feedback;
+    
+    if (typeof gtag === 'function') {
+      gtag('event', 'user_feedback', {
+        'event_category': 'Engagement',
+        'event_label': feedbackType 
+      });
+    }
+    
+    feedbackOptions.innerHTML = `<p style="text-align:center; font-size: 1.2rem;">Thank you for your feedback! 🙏</p>`;
+    
+    localStorage.setItem('hasGivenFeedback', 'true');
+
+    setTimeout(() => {
+        feedbackModal.close();
+        // Restore original content for the next session
+        feedbackOptions.innerHTML = `
+          <button class="btn" data-feedback="work"><i class="fa-solid fa-briefcase"></i> Work / Business</button>
+          <button class="btn" data-feedback="education"><i class="fa-solid fa-graduation-cap"></i> Education / Teaching</button>
+          <button class="btn" data-feedback="personal"><i class="fa-solid fa-user"></i> Personal / Fun</button>
+          <button class="btn" data-feedback="other"><i class="fa-solid fa-circle-question"></i> Something Else</button>
+        `;
+    }, 2000);
+  });
 
   // ===================================================================
   // INITIALIZATION
