@@ -17,6 +17,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const apiFetch = (url, opts = {}) => fetch(url, opts);
   const fullUrl = (f) => `${location.origin}/recordings/${f}`;
   
+  // +++ FIX: DEFINED THE HELPER FUNCTION IN A SHARED SCOPE +++
+  const trackAction = (eventName, category = 'File Actions') => {
+      if (typeof gtag === 'function' && currentFile) {
+          gtag('event', eventName, {
+              'event_category': category,
+              'event_label': currentFile
+          });
+      }
+  };
+
   // --- All DOM Element References ---
   const recorderView = $("#recorderView"), privacyView = $("#privacyView"), contactView = $("#contactView");
   let startBtn = $("#startBtn"); // Use 'let' as we will replace this node
@@ -684,14 +694,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!button || !currentFile) return;
     const action = button.dataset.action;
     
-    const trackAction = (eventName) => {
-        if (typeof gtag === 'function') {
-            gtag('event', eventName, {
-                'event_category': 'File Actions',
-                'event_label': currentFile
-            });
-        }
-    };
+    // NOTE: The trackAction function is now defined globally at the top of the file.
 
     switch (action) {
       case "clip":
@@ -779,34 +782,28 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   $("#emailClose")?.addEventListener("click", () => emailModal.close());
-//
-// --- In main.js, find and REPLACE your emailSend listener with this ---
-//
-
-$("#emailSend")?.addEventListener("click", async (e) => {
+  
+  $("#emailSend")?.addEventListener("click", async (e) => {
     const to = $("#emailTo").value.trim();
     const emailStatus = $("#emailStatus");
     const btn = e.target.closest("button");
 
-    if (!to || !to.includes('@')) { // Basic email validation
+    if (!to || !to.includes('@')) { 
         emailStatus.textContent = "❌ Please enter a valid e-mail address.";
         return;
     }
 
     btn.disabled = true;
     btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Sending...`;
-    emailStatus.textContent = ""; // Clear previous status
+    emailStatus.textContent = ""; 
 
     try {
-        // First, get a fresh secure link for the recording
         const linkRes = await apiFetch(`/link/secure/${currentFile}`).then(r => r.json());
         
         if (linkRes.status !== 'ok') {
-            // Handle failure to get the link
             throw new Error('Could not generate a secure link to email.');
         }
 
-        // Now, send the email with the new link
         const emailRes = await apiFetch("/send_email", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -814,84 +811,72 @@ $("#emailSend")?.addEventListener("click", async (e) => {
         }).then(x => x.json());
 
         if (emailRes.status === "ok") {
-            // SUCCESS!
-            trackAction('action_email_success'); // Track the success
+            trackAction('action_email_success'); 
             emailStatus.textContent = "✅ Sent successfully!";
             setTimeout(() => {
                 emailModal.close();
-                emailStatus.textContent = ""; // Reset for next time
+                emailStatus.textContent = ""; 
                 $("#emailTo").value = "";
             }, 2000);
         } else {
-            // The server responded with an error
             throw new Error(emailRes.error || "Failed to send email.");
         }
     } catch (err) {
-        // Catch any error (link generation, network, or server-side fail)
         console.error("Email sending failed:", err);
         emailStatus.textContent = `❌ ${err.message}`;
-        // Re-enable the button so the user can try again
+    } finally {
+        // This was missing from your original code but is good practice
         btn.disabled = false;
         btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send`;
     }
-});
-  deleteCancelBtn?.addEventListener("click", () => deleteModal.close());
-  //
-// --- In main.js, find and REPLACE your deleteConfirmBtn listener with this ---
-//
+  });
 
-deleteConfirmBtn?.addEventListener("click", async (e) => {
+  deleteCancelBtn?.addEventListener("click", () => deleteModal.close());
+
+  deleteConfirmBtn?.addEventListener("click", async (e) => {
     const btn = e.target.closest("button");
     const filename = btn.dataset.filename;
     if (!filename) return;
 
-    // Keep the "deleting" state
     btn.disabled = true;
     btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Deleting...`;
 
     try {
         const r = await apiFetch(`/delete/${filename}`, { method: "POST" }).then(r => r.json());
 
-        // Check the server's response
         if (r.status === "ok") {
-            // SUCCESS! Now update the UI.
             statusMsg.textContent = `✅ Recording ${filename} deleted successfully.`;
             
             const card = $(`.media-card[data-filename="${filename}"]`);
             if (card) {
-                // Add a fade-out animation and then remove the element
                 card.classList.add("deleting");
                 card.addEventListener("animationend", () => {
                     card.remove();
                 });
             }
             
-            // If the deleted file was the one being previewed, clear the preview
             if (currentFile === filename) {
                 activateFile(null);
             }
         } else {
-            // The server responded with an error
             alert("❌ Delete failed: " + r.error);
         }
     } catch (err) {
-        // A network error occurred
         console.error("Deletion request failed:", err);
         alert("❌ Delete failed. Please check your network connection and try again.");
     } finally {
-        // ALWAYS close the modal and re-enable the button
         deleteModal.close();
         btn.disabled = false;
         btn.innerHTML = `<i class="fa-solid fa-trash-can"></i> Yes, Delete`;
         
-        // Clear the status message after a few seconds
         setTimeout(() => { 
             if(statusMsg.textContent.includes('deleted')) {
                 statusMsg.textContent = "";
             }
         }, 4000);
     }
-});
+  });
+
   $("#forgetCancel")?.addEventListener("click", () => forgetSessionModal.close());
   $("#forgetConfirm")?.addEventListener("click", async (e) => {
       const btn = e.target.closest("button");
