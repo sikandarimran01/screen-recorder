@@ -367,19 +367,6 @@ dialog input {
   margin-top: 2rem;
   padding-top: 2rem;
 }
-.retention-notice {
-  font-size: 0.9rem;
-  color: var(--muted);
-  background-color: var(--card-highlight-bg);
-  border-radius: var(--radius);
-  padding: 0.75rem 1rem;
-  margin: -0.5rem 0 1rem 0;
-  border: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  text-align: left;
-}
 .grid-container {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -567,7 +554,7 @@ dialog textarea:focus {
 }
 
 /* --- Recording Tips Modal Styles --- */
-#screenOnlyTipsModal, #combinedTipsModal, #feedbackModal {
+#screenOnlyTipsModal, #combinedTipsModal, #feedbackModal, #proWaitlistModal {
   text-align: left;
   max-width: 550px;
 }
@@ -615,7 +602,7 @@ dialog textarea:focus {
 .tip-section.success h4 i { color: var(--success); }
 .tip-section.success p { color: var(--text); opacity: 0.9; }
 
-/* NEW: Feedback Modal Styles */
+/* Feedback Modal Styles */
 .feedback-options {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -632,6 +619,50 @@ dialog textarea:focus {
 }
 .feedback-options .btn i {
   font-size: 1.5rem;
+}
+
+/* Pro Waitlist Modal Styles */
+#proWaitlistModal h2 i {
+  color: var(--warn);
+}
+.pro-features-list {
+  margin: 1.5rem 0;
+  text-align: left;
+}
+.pro-features-list p {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  font-size: 1rem;
+}
+.pro-features-list i {
+  color: var(--success);
+}
+#proWaitlistModal label {
+  display: block;
+  text-align: left;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+  color: var(--muted);
+}
+#proWaitlistStatus {
+  font-weight: 500;
+  padding: 0.75rem;
+  border-radius: 5px;
+  text-align: center;
+  margin-bottom: 1rem;
+  display: none; /* Hide by default */
+}
+#proWaitlistStatus.success {
+  display: block;
+  color: var(--success);
+  background-color: rgba(25, 135, 84, 0.15);
+}
+#proWaitlistStatus.error {
+  display: block;
+  color: var(--danger);
+  background-color: rgba(220, 53, 69, 0.15);
 }
 
 
@@ -655,7 +686,7 @@ dialog textarea:focus {
     justify-content: center;
     bottom: 5px;
   }
-  /* NEW: Make feedback buttons stack on mobile */
+  /* Make feedback buttons stack on mobile */
   .feedback-options {
     grid-template-columns: 1fr;
   }
