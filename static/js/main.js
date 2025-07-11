@@ -779,24 +779,62 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   
   deleteCancelBtn?.addEventListener("click", () => deleteModal.close());
-  deleteConfirmBtn?.addEventListener("click", async (e) => {
-      const btn = e.target.closest("button");
-      const filename = btn.dataset.filename;
-      if (!filename) return;
-      btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Deleting...`;
-      trackAction('action_delete_success');
-      const r = await apiFetch(`/delete/${filename}`, { method: "POST" }).then(r => r.json());
-      if (r.status === "ok") {
-        statusMsg.textContent = `✅ Recording deleted successfully.`;
-        setTimeout(() => { statusMsg.textContent = ""; }, 4000);
-        const card = $(`.media-card[data-filename="${filename}"]`);
-        if (card) { card.classList.add("deleting"); card.addEventListener("animationend", () => card.remove()); }
-        if (currentFile === filename) activateFile(null);
-      } else { alert("❌ Delete failed: " + r.error); }
-      btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-trash-can"></i> Yes, Delete`;
-      deleteModal.close();
-  });
+  //
+// --- In main.js, find and REPLACE your deleteConfirmBtn listener with this ---
+//
 
+deleteConfirmBtn?.addEventListener("click", async (e) => {
+    const btn = e.target.closest("button");
+    const filename = btn.dataset.filename;
+    if (!filename) return;
+
+    // Keep the "deleting" state
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Deleting...`;
+
+    try {
+        const r = await apiFetch(`/delete/${filename}`, { method: "POST" }).then(r => r.json());
+
+        // Check the server's response
+        if (r.status === "ok") {
+            // SUCCESS! Now update the UI.
+            statusMsg.textContent = `✅ Recording ${filename} deleted successfully.`;
+            
+            const card = $(`.media-card[data-filename="${filename}"]`);
+            if (card) {
+                // Add a fade-out animation and then remove the element
+                card.classList.add("deleting");
+                card.addEventListener("animationend", () => {
+                    card.remove();
+                });
+            }
+            
+            // If the deleted file was the one being previewed, clear the preview
+            if (currentFile === filename) {
+                activateFile(null);
+            }
+        } else {
+            // The server responded with an error
+            alert("❌ Delete failed: " + r.error);
+        }
+    } catch (err) {
+        // A network error occurred
+        console.error("Deletion request failed:", err);
+        alert("❌ Delete failed. Please check your network connection and try again.");
+    } finally {
+        // ALWAYS close the modal and re-enable the button
+        deleteModal.close();
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-trash-can"></i> Yes, Delete`;
+        
+        // Clear the status message after a few seconds
+        setTimeout(() => { 
+            if(statusMsg.textContent.includes('deleted')) {
+                statusMsg.textContent = "";
+            }
+        }, 4000);
+    }
+});
   $("#forgetCancel")?.addEventListener("click", () => forgetSessionModal.close());
   $("#forgetConfirm")?.addEventListener("click", async (e) => {
       const btn = e.target.closest("button");
