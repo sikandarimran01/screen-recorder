@@ -830,34 +830,46 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#mobileWarningClose")?.addEventListener("click", () => { $("#mobileWarningModal")?.close(); });
 
   // NEW: Feedback Modal Logic
-  feedbackOptions?.addEventListener('click', (e) => {
-    const button = e.target.closest('button[data-feedback]');
-    if (!button) return;
+  // In main.js, find and replace this entire block
 
-    const feedbackType = button.dataset.feedback;
-    
-    if (typeof gtag === 'function') {
-      gtag('event', 'user_feedback', {
-        'event_category': 'Engagement',
-        'event_label': feedbackType 
-      });
-    }
-    
-    feedbackOptions.innerHTML = `<p style="text-align:center; font-size: 1.2rem;">Thank you for your feedback! 🙏</p>`;
-    
-    localStorage.setItem('hasGivenFeedback', 'true');
+feedbackOptions?.addEventListener('click', (e) => {
+  const button = e.target.closest('button[data-feedback]');
+  if (!button) return;
 
-    setTimeout(() => {
-        feedbackModal.close();
-        // Restore original content for the next session
-        feedbackOptions.innerHTML = `
-          <button class="btn" data-feedback="work"><i class="fa-solid fa-briefcase"></i> Work / Business</button>
-          <button class="btn" data-feedback="education"><i class="fa-solid fa-graduation-cap"></i> Education / Teaching</button>
-          <button class="btn" data-feedback="personal"><i class="fa-solid fa-user"></i> Personal / Fun</button>
-          <button class="btn" data-feedback="other"><i class="fa-solid fa-circle-question"></i> Something Else</button>
-        `;
-    }, 2000);
-  });
+  const feedbackType = button.dataset.feedback;
+  
+  // --- NEW DEBUG LINE ---
+  console.log(`DEBUG: Sending feedback to GA. Event: user_feedback, Label: ${feedbackType}`);
+  
+  // Send the result to Google Analytics
+  if (typeof gtag === 'function') {
+    gtag('event', 'user_feedback', {
+      'event_category': 'Engagement',
+      'event_label': feedbackType 
+    });
+  } else {
+    // --- NEW: Add a console warning if gtag isn't a function ---
+    console.warn("DEBUG: gtag function not found. Analytics event not sent.");
+  }
+  
+  // Show a "Thank You" message
+  feedbackOptions.innerHTML = `<p style="text-align:center; font-size: 1.2rem;">Thank you for your feedback! 🙏</p>`;
+  
+  // Remember to not ask this user again
+  localStorage.setItem('hasGivenFeedback', 'true');
+
+  // Close the modal after 2 seconds
+  setTimeout(() => {
+      feedbackModal.close();
+      // Restore original content for the next session
+      feedbackOptions.innerHTML = `
+        <button class="btn" data-feedback="work"><i class="fa-solid fa-briefcase"></i> Work / Business</button>
+        <button class="btn" data-feedback="education"><i class="fa-solid fa-graduation-cap"></i> Education / Teaching</button>
+        <button class="btn" data-feedback="personal"><i class="fa-solid fa-user"></i> Personal / Fun</button>
+        <button class="btn" data-feedback="other"><i class="fa-solid fa-circle-question"></i> Something Else</button>
+      `;
+  }, 2000);
+});
 
   // ===================================================================
   // INITIALIZATION
