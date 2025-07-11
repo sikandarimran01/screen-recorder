@@ -25,23 +25,22 @@ if not app.logger.handlers:
 # --- END NEW Logging Configuration ---
 
 # --- App Configuration ---
-# --- App Configuration --- (NEW GODADDY VERSION)
 app.config.update(
-    # This matches the "Hostname" from your screenshot
+    # Hostname from your screenshot
     MAIL_SERVER="smtpout.secureserver.net", 
     
-    # This matches the "Port" from your screenshot
+    # Port from your screenshot
     MAIL_PORT=465, 
     
-    # IMPORTANT: Use SSL for port 465, as indicated by "SSL / TLS"
+    # Use SSL for port 465
     MAIL_USE_SSL=True,
     MAIL_USE_TLS=False,
     
-    # These will pull your new credentials from Render's environment variables
+    # These pull credentials from Render's environment
     MAIL_USERNAME=os.getenv("MAIL_USERNAME"),
     MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),
     
-    # This will set the "From" display on your emails
+    # "From" display on your emails
     MAIL_DEFAULT_SENDER=("GrabScreen", os.getenv("MAIL_USERNAME")),
 )
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
