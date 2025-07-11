@@ -179,14 +179,14 @@
       <button id="forgetBtn" class="btn cancel hidden"><i class="fa-solid fa-user-slash"></i> Forget My Session</button>
     </div>
     
-<section id="filesPanel" class="hidden">
-  <h2>Your Recordings</h2>
- <p class="retention-notice">
-    <i class="fa-solid fa-info-circle"></i>
-    Please download your files. To keep this service free, recordings are automatically deleted after 24 hours.
-  </p>
-  <div id="mediaGrid" class="grid-container"></div>
-</section>
+    <section id="filesPanel" class="hidden">
+      <h2>Your Recordings</h2>
+     <p class="retention-notice">
+        <i class="fa-solid fa-info-circle"></i>
+        Please download your files. To keep this service free, recordings are automatically deleted after 24 hours.
+      </p>
+      <div id="mediaGrid" class="grid-container"></div>
+    </section>
   </div>
 
   <section id="privacyView" class="info-panel hidden">
@@ -351,6 +351,29 @@
         <i class="fa-solid fa-circle-play"></i> Got it, Proceed to Share
     </button>
     <button class="btn cancel" style="width: 100%;" formmethod="dialog">Cancel</button>
+  </dialog>
+
+  <!-- NEW: FEEDBACK MODAL -->
+  <dialog id="feedbackModal">
+    <h2>Quick Question!</h2>
+    <p>To help us improve GrabScreen, how are you using this recording?</p>
+    <div id="feedbackOptions" class="feedback-options">
+      <button class="btn" data-feedback="work">
+        <i class="fa-solid fa-briefcase"></i> Work / Business
+      </button>
+      <button class="btn" data-feedback="education">
+        <i class="fa-solid fa-graduation-cap"></i> Education / Teaching
+      </button>
+      <button class="btn" data-feedback="personal">
+        <i class="fa-solid fa-user"></i> Personal / Fun
+      </button>
+      <button class="btn" data-feedback="other">
+        <i class="fa-solid fa-circle-question"></i> Something Else
+      </button>
+    </div>
+    <button id="feedbackClose" class="btn cancel" style="width: 100%; margin-top: 1rem;" formmethod="dialog">
+      No thanks
+    </button>
   </dialog>
 
   <footer class="site-footer">
