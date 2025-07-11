@@ -656,60 +656,101 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  actionsPanel.addEventListener("click", async (e) => {
-    const button = e.target.closest("button[data-action]") || e.target.closest("a[data-action]");
-    if (!button || !currentFile) return;
-    const action = button.dataset.action;
-    
-    switch (action) {
-      case "clip": setupTrimSlider(); break;
-      case "download-webm":
-          showFeedbackModalIfNeeded();
-          break;
-      case "download-mp4":
-          const mp4Button = button;
-          const originalMp4ButtonContent = mp4Button.innerHTML; 
-          mp4Button.disabled = true;
-          mp4Button.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Converting...`;
-          statusMsg.textContent = "⏳ Converting to MP4. This might take a moment...";
-          try {
-              const downloadUrl = `/download/mp4/${currentFile}`;
-              const response = await fetch(downloadUrl);
-              if (response.ok) {
-                  const blob = await response.blob();
-                  const url = window.URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.style.display = 'none';
-                  a.href = url;
-                  a.download = currentFile.replace('.webm', '.mp4');
-                  document.body.appendChild(a);
-                  a.click();
-                  window.URL.revokeObjectURL(url);
-                  a.remove();
-                  statusMsg.textContent = `✅ MP4 conversion complete! Check your downloads.`;
-                  showFeedbackModalIfNeeded();
-              } else {
-                  const errorData = await response.json();
-                  statusMsg.textContent = `❌ MP4 conversion failed: ${errorData.error || 'Unknown error'}`;
-              }
-          } catch (error) {
-              console.error("MP4 conversion request failed:", error);
-              statusMsg.textContent = `❌ MP4 conversion request failed. Check network or console.`;
-          } finally {
-              resetButton(mp4Button, originalMp4ButtonContent); 
-              setTimeout(() => { if (statusMsg.textContent.includes('MP4')) statusMsg.textContent = ''; }, 6000);
-          }
-          break;
-      case "secure-link": { const r = await apiFetch(`/link/secure/${currentFile}`).then(r => r.json()); if (r.status === "ok") copy(r.url, button); break; }
-      case "public-link": { const r = await apiFetch(`/link/public/${currentFile}`).then(r => r.json()); if (r.status === "ok") { copy(r.url, button); button.innerHTML = `<i class="fa-solid fa-link"></i> Public Link Active`; } break; }
-      case "email": emailModal?.showModal(); break;
-      case "delete":
-        fileToDeleteEl.textContent = currentFile;
-        deleteConfirmBtn.dataset.filename = currentFile;
-        deleteModal?.showModal();
-        break;
+  //
+// --- REPLACE your existing actionsPanel listener with this complete, updated block ---
+//
+
+actionsPanel.addEventListener("click", async (e) => {
+  const button = e.target.closest("button[data-action]") || e.target.closest("a[data-action]");
+  if (!button || !currentFile) return;
+  const action = button.dataset.action;
+
+  // Helper function to send events to Google Analytics
+  const trackAction = (eventName) => {
+    if (typeof gtag === 'function') {
+      gtag('event', eventName, {
+        'event_category': 'File Actions',
+        'event_label': currentFile // This allows you to see which file was acted on
+      });
     }
-  });
+  };
+
+  switch (action) {
+    case "clip":
+      trackAction('action_clip_start'); // Track when user opens the trimmer
+      setupTrimSlider();
+      break;
+
+    case "download-webm":
+      trackAction('action_download_webm'); // Track WEBM download clicks
+      showFeedbackModalIfNeeded();
+      // Note: The 'download' attribute on the <a> tag handles the actual download
+      break;
+
+    case "download-mp4":
+      trackAction('action_download_mp4_start'); // Track when user STARTS the MP4 process
+      const mp4Button = button;
+      const originalMp4ButtonContent = mp4Button.innerHTML; 
+      mp4Button.disabled = true;
+      mp4Button.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Converting...`;
+      statusMsg.textContent = "⏳ Converting to MP4. This might take a moment...";
+      try {
+          const downloadUrl = `/download/mp4/${currentFile}`;
+          const response = await fetch(downloadUrl);
+          if (response.ok) {
+              trackAction('action_download_mp4_success'); // Track a SUCCESSFUL conversion
+              const blob = await response.blob();
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.style.display = 'none';
+              a.href = url;
+              a.download = currentFile.replace('.webm', '.mp4');
+              document.body.appendChild(a);
+              a.click();
+              window.URL.revokeObjectURL(url);
+              a.remove();
+              statusMsg.textContent = `✅ MP4 conversion complete! Check your downloads.`;
+              showFeedbackModalIfNeeded();
+          } else {
+              trackAction('action_download_mp4_fail'); // Track a FAILED conversion
+              const errorData = await response.json();
+              statusMsg.textContent = `❌ MP4 conversion failed: ${errorData.error || 'Unknown error'}`;
+          }
+      } catch (error) {
+          trackAction('action_download_mp4_fail'); // Track a FAILED conversion
+          console.error("MP4 conversion request failed:", error);
+          statusMsg.textContent = `❌ MP4 conversion request failed. Check network or console.`;
+      } finally {
+          resetButton(mp4Button, originalMp4ButtonContent); 
+          setTimeout(() => { if (statusMsg.textContent.includes('MP4')) statusMsg.textContent = ''; }, 6000);
+      }
+      break;
+
+    case "secure-link":
+      trackAction('action_copy_secure_link'); // Track secure link clicks
+      const r_secure = await apiFetch(`/link/secure/${currentFile}`).then(r => r.json());
+      if (r_secure.status === "ok") copy(r_secure.url, button);
+      break;
+      
+    case "public-link":
+      trackAction('action_copy_public_link'); // Track public link clicks
+      const r_public = await apiFetch(`/link/public/${currentFile}`).then(r => r.json());
+      if (r_public.status === "ok") { copy(r_public.url, button); button.innerHTML = `<i class="fa-solid fa-link"></i> Public Link Active`; }
+      break;
+      
+    case "email":
+      trackAction('action_email_start'); // Track when user opens the email modal
+      emailModal?.showModal();
+      break;
+
+    case "delete":
+      trackAction('action_delete_start'); // Track when user opens the delete confirmation
+      fileToDeleteEl.textContent = currentFile;
+      deleteConfirmBtn.dataset.filename = currentFile;
+      deleteModal?.showModal();
+      break;
+  }
+});
 
   $("#clipCancel")?.addEventListener("click", () => { clipPanel.classList.add("hidden"); if (trimSlider) { trimSlider.destroy(); trimSlider = null; } statusMsg.textContent = ""; });
   $("#clipGo")?.addEventListener("click", async (e) => {
