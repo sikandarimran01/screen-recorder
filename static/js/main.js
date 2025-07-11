@@ -547,7 +547,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       resetRecordingButtons(); 
       };
-      
+
       mediaRecorder.start();
       statusMsg.textContent = "🎬 Recording webcam…";
       webcamStream.getTracks().forEach(track => { track.onended = () => stopBtn.click(); });
@@ -779,27 +779,62 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   $("#emailClose")?.addEventListener("click", () => emailModal.close());
-  $("#emailSend")?.addEventListener("click", async (e) => {
-      const to = $("#emailTo").value.trim();
-      if (!to) { $("#emailStatus").textContent = "❌ Enter an e-mail."; return; }
-      const btn = e.target.closest("button");
-      btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Sending...`;
-      const linkRes = await apiFetch(`/link/secure/${currentFile}`).then(r => r.json());
-      if (linkRes.status !== 'ok') {
-          alert('Could not generate a secure link.');
-          btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send`; return;
-      }
-      const r = await apiFetch("/send_email", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ to, url: linkRes.url }) }).then(x => x.json());
-      if (r.status === "ok") {
-        trackAction('action_email_success');
-        $("#emailStatus").textContent = "✅ Sent!";
-      } else {
-        $("#emailStatus").textContent = "❌ " + (r.error || "Failed");
-      }
-      btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send`;
-      if (r.status === "ok") setTimeout(() => { emailModal.close(); $("#emailStatus").textContent = ""; $("#emailTo").value = ""; }, 1500);
-  });
-  
+//
+// --- In main.js, find and REPLACE your emailSend listener with this ---
+//
+
+$("#emailSend")?.addEventListener("click", async (e) => {
+    const to = $("#emailTo").value.trim();
+    const emailStatus = $("#emailStatus");
+    const btn = e.target.closest("button");
+
+    if (!to || !to.includes('@')) { // Basic email validation
+        emailStatus.textContent = "❌ Please enter a valid e-mail address.";
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Sending...`;
+    emailStatus.textContent = ""; // Clear previous status
+
+    try {
+        // First, get a fresh secure link for the recording
+        const linkRes = await apiFetch(`/link/secure/${currentFile}`).then(r => r.json());
+        
+        if (linkRes.status !== 'ok') {
+            // Handle failure to get the link
+            throw new Error('Could not generate a secure link to email.');
+        }
+
+        // Now, send the email with the new link
+        const emailRes = await apiFetch("/send_email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ to, url: linkRes.url })
+        }).then(x => x.json());
+
+        if (emailRes.status === "ok") {
+            // SUCCESS!
+            trackAction('action_email_success'); // Track the success
+            emailStatus.textContent = "✅ Sent successfully!";
+            setTimeout(() => {
+                emailModal.close();
+                emailStatus.textContent = ""; // Reset for next time
+                $("#emailTo").value = "";
+            }, 2000);
+        } else {
+            // The server responded with an error
+            throw new Error(emailRes.error || "Failed to send email.");
+        }
+    } catch (err) {
+        // Catch any error (link generation, network, or server-side fail)
+        console.error("Email sending failed:", err);
+        emailStatus.textContent = `❌ ${err.message}`;
+        // Re-enable the button so the user can try again
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send`;
+    }
+});
   deleteCancelBtn?.addEventListener("click", () => deleteModal.close());
   //
 // --- In main.js, find and REPLACE your deleteConfirmBtn listener with this ---
