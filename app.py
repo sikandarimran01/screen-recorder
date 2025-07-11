@@ -62,11 +62,35 @@ else:
     # FFMPEG_PATH = "/var/data/ffmpeg-7.0.2-amd64-static/ffmpeg" 
     # (assuming you extracted 'ffmpeg-7.0.2-amd64-static' into /var/data/)
 
+#
+# --- REPLACE the old directory creation block with this new one ---
+#
+
+# --- Path for the subdirectory INSIDE the persistent disk ---
+# RECDIR is now /var/data/recordings
+RECDIR_SUBFOLDER = "recordings" 
+RECDIR = os.path.join("/var/data", RECDIR_SUBFOLDER)
+
+# Define the MP4 directory path based on the new RECDIR
 MP4_DIR = os.path.join(RECDIR, "mp4_converted")
 
-# Ensure directories exist (will now create them inside /var/data/recordings)
-os.makedirs(RECDIR, exist_ok=True)
-os.makedirs(MP4_DIR, exist_ok=True) 
+# --- Safer Directory Creation ---
+# This code will only run if the app is NOT in cleanup mode,
+# and it creates the subdirectories correctly without touching /var/data itself.
+
+import sys
+# Only try to create directories if we are NOT running the cleanup command
+if 'cleanup' not in sys.argv:
+    try:
+        # Create the 'recordings' subdirectory inside /var/data
+        os.makedirs(RECDIR, exist_ok=True)
+        # Create the 'mp4_converted' subdirectory inside /var/data/recordings
+        os.makedirs(MP4_DIR, exist_ok=True)
+        app.logger.info(f"Successfully ensured directories exist: {RECDIR} and {MP4_DIR}")
+    except PermissionError:
+        app.logger.error("FATAL: Permission denied to create directories inside /var/data. Check your Render disk setup.")
+    except Exception as e:
+        app.logger.error(f"FATAL: Could not create directories. Error: {e}")
 
 # --- FFmpeg Path Verification (for better debugging) ---
 # This check is more effective for absolute paths.
