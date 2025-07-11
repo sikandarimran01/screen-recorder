@@ -574,11 +574,17 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#showContactLink")?.addEventListener("click", (e) => { e.preventDefault(); showView('contact'); });
   $$(".back-btn").forEach(btn => btn.addEventListener("click", (e) => { e.preventDefault(); showView('recorder'); }));
   
-  startBtn?.addEventListener("click", () => {
+ startBtn?.addEventListener("click", () => {
+    // NEW line to track this specific button click
+    if (typeof gtag === 'function') gtag('event', 'start_recording_screen_only');
+    
     screenOnlyTipsModal.showModal();
-  });
+});
 
   startWebcamBtn?.addEventListener("click", async () => {
+    // NEW line to track this specific button click
+    if (typeof gtag === 'function') gtag('event', 'start_recording_combined');
+
     stopAllStreams(); 
     webcamCaptureArea.classList.remove("hidden"); 
     startBtn.classList.add("hidden"); 
@@ -596,9 +602,12 @@ document.addEventListener("DOMContentLoaded", () => {
     startBtn.addEventListener("click", () => {
         combinedTipsModal.showModal();
     });
-  });
+});
 
-  startWebcamOnlyBtn?.addEventListener("click", async () => {
+ startWebcamOnlyBtn?.addEventListener("click", async () => {
+    // NEW line to track this specific button click
+    if (typeof gtag === 'function') gtag('event', 'start_recording_webcam_only');
+
     stopAllStreams(); 
     webcamCaptureArea.classList.remove("hidden");
     startBtn.classList.add("hidden"); 
@@ -617,7 +626,7 @@ document.addEventListener("DOMContentLoaded", () => {
     startBtn.addEventListener("click", () => {
         startWebcamOnlyRecording();
     });
-  });
+});
 
   proceedScreenOnlyBtn?.addEventListener("click", () => {
     screenOnlyTipsModal.close();
