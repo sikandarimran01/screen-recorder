@@ -832,14 +832,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // NEW: Feedback Modal Logic
   // In main.js, find and replace this entire block
 
+// FINAL: Feedback Modal Logic
 feedbackOptions?.addEventListener('click', (e) => {
   const button = e.target.closest('button[data-feedback]');
   if (!button) return;
 
   const feedbackType = button.dataset.feedback;
-  
-  // --- NEW DEBUG LINE ---
-  console.log(`DEBUG: Sending feedback to GA. Event: user_feedback, Label: ${feedbackType}`);
   
   // Send the result to Google Analytics
   if (typeof gtag === 'function') {
@@ -847,9 +845,6 @@ feedbackOptions?.addEventListener('click', (e) => {
       'event_category': 'Engagement',
       'event_label': feedbackType 
     });
-  } else {
-    // --- NEW: Add a console warning if gtag isn't a function ---
-    console.warn("DEBUG: gtag function not found. Analytics event not sent.");
   }
   
   // Show a "Thank You" message
