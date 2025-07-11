@@ -99,6 +99,45 @@ def save_json(data, file_path):
 public_links = load_json(LINKS_FILE)
 user_sessions = load_json(SESSIONS_FILE)
 
+#cleanup_old_files
+
+def cleanup_old_files():
+    """Deletes files older than 24 hours from recordings and converted folders."""
+    app.logger.info("--- [CRON] Running scheduled cleanup task ---")
+    now = datetime.datetime.now()
+    # Files created more than 24 hours ago will be deleted
+    cutoff = now - datetime.timedelta(hours=24)
+    
+    deleted_count = 0
+    
+    # List of directories to clean up
+    directories_to_clean = [RECDIR, MP4_DIR]
+    
+    for directory in directories_to_clean:
+        try:
+            if not os.path.isdir(directory):
+                app.logger.warning(f"[CRON] Cleanup skipped: Directory not found at {directory}")
+                continue
+            
+            for filename in os.listdir(directory):
+                file_path = os.path.join(directory, filename)
+                
+                # Make sure it's a file, not a directory
+                if os.path.isfile(file_path):
+                    try:
+                        file_mtime = datetime.datetime.fromtimestamp(os.path.getmtime(file_path))
+                        if file_mtime < cutoff:
+                            os.remove(file_path)
+                            deleted_count += 1
+                            app.logger.info(f"[CRON] Cleanup: Deleted old file {file_path}")
+                    except Exception as e:
+                        app.logger.error(f"[CRON] Error processing file {file_path}: {e}")
+
+        except Exception as e:
+            app.logger.error(f"[CRON] Error accessing directory {directory}: {e}")
+            
+    app.logger.info(f"--- [CRON] Cleanup finished. Deleted {deleted_count} old files. ---")
+
 # ─────────────────────────────────────────────────────────
 # Routes
 # ─────────────────────────────────────────────────────────
@@ -442,5 +481,22 @@ def contact_us():
         return jsonify({"status": "fail", "error": "Sorry, an error occurred and the message could not be sent."}), 500
 
 
+
 if __name__ == "__main__":
-    app.run(debug=(os.getenv("FLASK_ENV") == "development"), port=5001)
+    # This allows us to run specific functions from the command line
+    # For example: `python app.py cleanup`
+    import sys
+    
+    if len(sys.argv) > 1:
+        # If the first argument is 'cleanup', run the cleanup function
+        if sys.argv[1] == 'cleanup':
+            with app.app_context():
+                cleanup_old_files()
+        else:
+            print(f"Unknown command: {sys.argv[1]}")
+    else:
+        # If no arguments are given, run the web server as default
+        # Render uses a Gunicorn command to start your web server, so this app.run
+        # is primarily for when you test on your local PC (127.0.0.1:5001)
+        is_development = os.getenv("FLASK_ENV") == "development"
+        app.run(debug=is_development, host="0.0.0.0", port=int(os.getenv("PORT", 5001)))
