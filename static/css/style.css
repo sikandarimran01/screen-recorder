@@ -367,6 +367,19 @@ dialog input {
   margin-top: 2rem;
   padding-top: 2rem;
 }
+.retention-notice {
+  font-size: 0.9rem;
+  color: var(--muted);
+  background-color: var(--card-highlight-bg);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin: -0.5rem 0 1rem 0;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: left;
+}
 .grid-container {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -423,21 +436,6 @@ dialog input {
   top: 1rem;
   left: 1rem;
   z-index: 20;
-}
-
-/* In style.css, maybe near the .info-panel styles */
-.retention-notice {
-  font-size: 0.9rem;
-  color: var(--muted);
-  background-color: var(--card-highlight-bg);
-  border-radius: var(--radius);
-  padding: 0.75rem 1rem;
-  margin: -0.5rem 0 1rem 0;
-  border: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  text-align: left;
 }
 
 /* --- Advanced Clip Trimmer --- */
@@ -569,7 +567,7 @@ dialog textarea:focus {
 }
 
 /* --- Recording Tips Modal Styles --- */
-#screenOnlyTipsModal, #combinedTipsModal {
+#screenOnlyTipsModal, #combinedTipsModal, #feedbackModal {
   text-align: left;
   max-width: 550px;
 }
@@ -617,6 +615,25 @@ dialog textarea:focus {
 .tip-section.success h4 i { color: var(--success); }
 .tip-section.success p { color: var(--text); opacity: 0.9; }
 
+/* NEW: Feedback Modal Styles */
+.feedback-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+}
+.feedback-options .btn {
+  width: 100%;
+  height: 100%;
+  padding: 1rem;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-size: 1rem;
+}
+.feedback-options .btn i {
+  font-size: 1.5rem;
+}
+
 
 @media (max-width: 640px) {
   body { padding: 1rem; }
@@ -637,5 +654,9 @@ dialog textarea:focus {
     flex-wrap: wrap;
     justify-content: center;
     bottom: 5px;
+  }
+  /* NEW: Make feedback buttons stack on mobile */
+  .feedback-options {
+    grid-template-columns: 1fr;
   }
 }
