@@ -27,8 +27,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const trimSliderEl = $("#trim-slider"), trimStartTime = $("#trim-start-time"), trimEndTime = $("#trim-end-time");
   const deleteModal = $("#deleteModal"), fileToDeleteEl = $("#fileToDelete"), deleteConfirmBtn = $("#deleteConfirm"), deleteCancelBtn = $("#deleteCancel");
   const emailModal = $("#emailModal"), forgetSessionModal = $("#forgetSessionModal");
-
-  // Webcam related DOM elements
   const startWebcamBtn = $("#startWebcamBtn");
   const startWebcamOnlyBtn = $("#startWebcamOnlyBtn");
   const webcamCaptureArea = $("#webcamCaptureArea");
@@ -40,14 +38,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const toggleWebcamOverlayBtn = $("#toggleWebcamOverlay");
   const moveWebcamOverlayBtn = $("#moveWebcamOverlay");
   const resizeWebcamOverlayBtn = $("#resizeWebcamOverlay");
-
-  // Specific Modal References
   const screenOnlyTipsModal = $("#screenOnlyTipsModal");
   const proceedScreenOnlyBtn = $("#proceedScreenOnlyBtn");
   const combinedTipsModal = $("#combinedTipsModal");
   const proceedCombinedBtn = $("#proceedCombinedBtn");
   const feedbackModal = $("#feedbackModal");
   const feedbackOptions = $("#feedbackOptions");
+  const proWaitlistModal = $("#proWaitlistModal");
+  const showProWaitlistLink = $("#showProWaitlistLink");
+  const proWaitlistSubmitBtn = $("#proWaitlistSubmitBtn");
+  const proWaitlistCloseBtn = $("#proWaitlistCloseBtn");
 
   // --- App State ---
   let mediaRecorder, chunks = [], currentFile = null, trimSlider = null;
@@ -74,7 +74,6 @@ document.addEventListener("DOMContentLoaded", () => {
     recorderView.classList.add("hidden");
     privacyView.classList.add("hidden");
     contactView.classList.add("hidden");
-
     if (viewName === 'recorder') recorderView.classList.remove("hidden");
     if (viewName === 'privacy') privacyView.classList.remove("hidden");
     if (viewName === 'contact') contactView.classList.remove("hidden");
@@ -116,7 +115,6 @@ document.addEventListener("DOMContentLoaded", () => {
     currentFile = filename;
     preview.src = fullUrl(filename); 
     previewArea.classList.remove("hidden");
-    
     actionsPanel.innerHTML = `
       <a href="/download/${filename}" class="btn" data-action="download-webm" download><i class="fa-solid fa-download"></i> Download WEBM</a>
       <button class="btn" data-action="download-mp4"><i class="fa-solid fa-file-video"></i> Download MP4</button>
@@ -126,7 +124,6 @@ document.addEventListener("DOMContentLoaded", () => {
       <button class="btn" data-action="clip"><i class="fa-solid fa-scissors"></i> Trim</button>
       <button class="btn danger" data-action="delete"><i class="fa-solid fa-trash-can"></i> Delete</button>
     `;
-    
     $$(".media-card").forEach(card => card.classList.toggle("selected", card.dataset.filename === filename));
     previewArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
@@ -309,38 +306,38 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function getCombinedStream() {
-      if (!screenStream || screenStream.getVideoTracks().length === 0) { throw new Error("Screen stream not available for combined recording."); }
-      const screenVideoTrack = screenStream.getVideoTracks()[0];
-      const settings = screenVideoTrack.getSettings();
-      recordingCanvas.width = settings.width || 1280; 
-      recordingCanvas.height = settings.height || 720;
-      if (!screenVideoElementForCanvas) {
-        screenVideoElementForCanvas = document.createElement('video');
-        screenVideoElementForCanvas.style.display = 'none';
-        screenVideoElementForCanvas.muted = true; 
-        document.body.appendChild(screenVideoElementForCanvas);
-      }
-      screenVideoElementForCanvas.srcObject = screenStream;
-      screenVideoElementForCanvas.play().catch(e => console.warn("Screen video for canvas play error:", e));
+    if (!screenStream || screenStream.getVideoTracks().length === 0) { throw new Error("Screen stream not available for combined recording."); }
+    const screenVideoTrack = screenStream.getVideoTracks()[0];
+    const settings = screenVideoTrack.getSettings();
+    recordingCanvas.width = settings.width || 1280; 
+    recordingCanvas.height = settings.height || 720;
+    if (!screenVideoElementForCanvas) {
+      screenVideoElementForCanvas = document.createElement('video');
+      screenVideoElementForCanvas.style.display = 'none';
+      screenVideoElementForCanvas.muted = true; 
+      document.body.appendChild(screenVideoElementForCanvas);
+    }
+    screenVideoElementForCanvas.srcObject = screenStream;
+    screenVideoElementForCanvas.play().catch(e => console.warn("Screen video for canvas play error:", e));
+    await new Promise(resolve => {
+      if (screenVideoElementForCanvas.readyState >= HTMLMediaElement.HAVE_METADATA) { resolve(); } 
+      else { screenVideoElementForCanvas.onloadedmetadata = () => resolve(); }
+    });
+    if (webcamVideoElementForCanvas && webcamStream && webcamStream.getVideoTracks().length > 0) {
       await new Promise(resolve => {
-        if (screenVideoElementForCanvas.readyState >= HTMLMediaElement.HAVE_METADATA) { resolve(); } 
-        else { screenVideoElementForCanvas.onloadedmetadata = () => resolve(); }
+        if (webcamVideoElementForCanvas.readyState >= HTMLMediaElement.HAVE_METADATA) { resolve(); } 
+        else { webcamVideoElementForCanvas.onloadedmetadata = () => resolve(); }
       });
-      if (webcamVideoElementForCanvas && webcamStream && webcamStream.getVideoTracks().length > 0) {
-        await new Promise(resolve => {
-          if (webcamVideoElementForCanvas.readyState >= HTMLMediaElement.HAVE_METADATA) { resolve(); } 
-          else { webcamVideoElementForCanvas.onloadedmetadata = () => resolve(); }
-        });
-      }
-      if (animationFrameId) cancelAnimationFrame(animationFrameId); 
-      animationFrameId = requestAnimationFrame(drawFrame);
-      audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      const destination = audioContext.createMediaStreamDestination();
-      if (screenStream.getAudioTracks().length > 0) { audioContext.createMediaStreamSource(screenStream).connect(destination); }
-      if (webcamStream && webcamStream.getAudioTracks().length > 0) { audioContext.createMediaStreamSource(webcamStream).connect(destination); }
-      const combinedVideoTrack = recordingCanvas.captureStream(30).getVideoTracks()[0]; 
-      const combinedAudioTrack = destination.stream.getAudioTracks()[0];
-      return new MediaStream([combinedVideoTrack, combinedAudioTrack]);
+    }
+    if (animationFrameId) cancelAnimationFrame(animationFrameId); 
+    animationFrameId = requestAnimationFrame(drawFrame);
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const destination = audioContext.createMediaStreamDestination();
+    if (screenStream.getAudioTracks().length > 0) { audioContext.createMediaStreamSource(screenStream).connect(destination); }
+    if (webcamStream && webcamStream.getAudioTracks().length > 0) { audioContext.createMediaStreamSource(webcamStream).connect(destination); }
+    const combinedVideoTrack = recordingCanvas.captureStream(30).getVideoTracks()[0]; 
+    const combinedAudioTrack = destination.stream.getAudioTracks()[0];
+    return new MediaStream([combinedVideoTrack, combinedAudioTrack]);
   }
 
   function setupWebcamOverlayControls() {
@@ -561,6 +558,7 @@ document.addEventListener("DOMContentLoaded", () => {
     startBtn = newStartBtn;
     
     startBtn.addEventListener("click", () => {
+        if (typeof gtag === 'function') gtag('event', 'start_recording_screen_only');
         screenOnlyTipsModal.showModal();
     });
     startBtn.innerHTML = '<i class="fa-solid fa-desktop"></i> Record Screen Only'; 
@@ -574,17 +572,13 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#showContactLink")?.addEventListener("click", (e) => { e.preventDefault(); showView('contact'); });
   $$(".back-btn").forEach(btn => btn.addEventListener("click", (e) => { e.preventDefault(); showView('recorder'); }));
   
- startBtn?.addEventListener("click", () => {
-    // NEW line to track this specific button click
+  startBtn?.addEventListener("click", () => {
     if (typeof gtag === 'function') gtag('event', 'start_recording_screen_only');
-    
     screenOnlyTipsModal.showModal();
-});
+  });
 
   startWebcamBtn?.addEventListener("click", async () => {
-    // NEW line to track this specific button click
     if (typeof gtag === 'function') gtag('event', 'start_recording_combined');
-
     stopAllStreams(); 
     webcamCaptureArea.classList.remove("hidden"); 
     startBtn.classList.add("hidden"); 
@@ -602,12 +596,10 @@ document.addEventListener("DOMContentLoaded", () => {
     startBtn.addEventListener("click", () => {
         combinedTipsModal.showModal();
     });
-});
+  });
 
- startWebcamOnlyBtn?.addEventListener("click", async () => {
-    // NEW line to track this specific button click
+  startWebcamOnlyBtn?.addEventListener("click", async () => {
     if (typeof gtag === 'function') gtag('event', 'start_recording_webcam_only');
-
     stopAllStreams(); 
     webcamCaptureArea.classList.remove("hidden");
     startBtn.classList.add("hidden"); 
@@ -626,7 +618,7 @@ document.addEventListener("DOMContentLoaded", () => {
     startBtn.addEventListener("click", () => {
         startWebcamOnlyRecording();
     });
-});
+  });
 
   proceedScreenOnlyBtn?.addEventListener("click", () => {
     screenOnlyTipsModal.close();
@@ -665,101 +657,91 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  //
-// --- REPLACE your existing actionsPanel listener with this complete, updated block ---
-//
+  actionsPanel.addEventListener("click", async (e) => {
+    const button = e.target.closest("button[data-action]") || e.target.closest("a[data-action]");
+    if (!button || !currentFile) return;
+    const action = button.dataset.action;
+    
+    const trackAction = (eventName) => {
+        if (typeof gtag === 'function') {
+            gtag('event', eventName, {
+                'event_category': 'File Actions',
+                'event_label': currentFile
+            });
+        }
+    };
 
-actionsPanel.addEventListener("click", async (e) => {
-  const button = e.target.closest("button[data-action]") || e.target.closest("a[data-action]");
-  if (!button || !currentFile) return;
-  const action = button.dataset.action;
-
-  // Helper function to send events to Google Analytics
-  const trackAction = (eventName) => {
-    if (typeof gtag === 'function') {
-      gtag('event', eventName, {
-        'event_category': 'File Actions',
-        'event_label': currentFile // This allows you to see which file was acted on
-      });
-    }
-  };
-
-  switch (action) {
-    case "clip":
-      trackAction('action_clip_start'); // Track when user opens the trimmer
-      setupTrimSlider();
-      break;
-
-    case "download-webm":
-      trackAction('action_download_webm'); // Track WEBM download clicks
-      showFeedbackModalIfNeeded();
-      // Note: The 'download' attribute on the <a> tag handles the actual download
-      break;
-
-    case "download-mp4":
-      trackAction('action_download_mp4_start'); // Track when user STARTS the MP4 process
-      const mp4Button = button;
-      const originalMp4ButtonContent = mp4Button.innerHTML; 
-      mp4Button.disabled = true;
-      mp4Button.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Converting...`;
-      statusMsg.textContent = "⏳ Converting to MP4. This might take a moment...";
-      try {
-          const downloadUrl = `/download/mp4/${currentFile}`;
-          const response = await fetch(downloadUrl);
-          if (response.ok) {
-              trackAction('action_download_mp4_success'); // Track a SUCCESSFUL conversion
-              const blob = await response.blob();
-              const url = window.URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.style.display = 'none';
-              a.href = url;
-              a.download = currentFile.replace('.webm', '.mp4');
-              document.body.appendChild(a);
-              a.click();
-              window.URL.revokeObjectURL(url);
-              a.remove();
-              statusMsg.textContent = `✅ MP4 conversion complete! Check your downloads.`;
-              showFeedbackModalIfNeeded();
-          } else {
-              trackAction('action_download_mp4_fail'); // Track a FAILED conversion
-              const errorData = await response.json();
-              statusMsg.textContent = `❌ MP4 conversion failed: ${errorData.error || 'Unknown error'}`;
-          }
-      } catch (error) {
-          trackAction('action_download_mp4_fail'); // Track a FAILED conversion
-          console.error("MP4 conversion request failed:", error);
-          statusMsg.textContent = `❌ MP4 conversion request failed. Check network or console.`;
-      } finally {
-          resetButton(mp4Button, originalMp4ButtonContent); 
-          setTimeout(() => { if (statusMsg.textContent.includes('MP4')) statusMsg.textContent = ''; }, 6000);
+    switch (action) {
+      case "clip":
+        trackAction('action_clip_start');
+        setupTrimSlider();
+        break;
+      case "download-webm":
+        trackAction('action_download_webm');
+        showFeedbackModalIfNeeded();
+        break;
+      case "download-mp4":
+        trackAction('action_download_mp4_start');
+        const mp4Button = button;
+        const originalMp4ButtonContent = mp4Button.innerHTML; 
+        mp4Button.disabled = true;
+        mp4Button.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Converting...`;
+        statusMsg.textContent = "⏳ Converting to MP4. This might take a moment...";
+        try {
+            const downloadUrl = `/download/mp4/${currentFile}`;
+            const response = await fetch(downloadUrl);
+            if (response.ok) {
+                trackAction('action_download_mp4_success');
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = currentFile.replace('.webm', '.mp4');
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+                statusMsg.textContent = `✅ MP4 conversion complete! Check your downloads.`;
+                showFeedbackModalIfNeeded();
+            } else {
+                trackAction('action_download_mp4_fail');
+                const errorData = await response.json();
+                statusMsg.textContent = `❌ MP4 conversion failed: ${errorData.error || 'Unknown error'}`;
+            }
+        } catch (error) {
+            trackAction('action_download_mp4_fail');
+            console.error("MP4 conversion request failed:", error);
+            statusMsg.textContent = `❌ MP4 conversion request failed. Check network or console.`;
+        } finally {
+            resetButton(mp4Button, originalMp4ButtonContent); 
+            setTimeout(() => { if (statusMsg.textContent.includes('MP4')) statusMsg.textContent = ''; }, 6000);
+        }
+        break;
+      case "secure-link": {
+        trackAction('action_copy_secure_link');
+        const r = await apiFetch(`/link/secure/${currentFile}`).then(r => r.json());
+        if (r.status === "ok") copy(r.url, button);
+        break;
       }
-      break;
-
-    case "secure-link":
-      trackAction('action_copy_secure_link'); // Track secure link clicks
-      const r_secure = await apiFetch(`/link/secure/${currentFile}`).then(r => r.json());
-      if (r_secure.status === "ok") copy(r_secure.url, button);
-      break;
-      
-    case "public-link":
-      trackAction('action_copy_public_link'); // Track public link clicks
-      const r_public = await apiFetch(`/link/public/${currentFile}`).then(r => r.json());
-      if (r_public.status === "ok") { copy(r_public.url, button); button.innerHTML = `<i class="fa-solid fa-link"></i> Public Link Active`; }
-      break;
-      
-    case "email":
-      trackAction('action_email_start'); // Track when user opens the email modal
-      emailModal?.showModal();
-      break;
-
-    case "delete":
-      trackAction('action_delete_start'); // Track when user opens the delete confirmation
-      fileToDeleteEl.textContent = currentFile;
-      deleteConfirmBtn.dataset.filename = currentFile;
-      deleteModal?.showModal();
-      break;
-  }
-});
+      case "public-link": {
+        trackAction('action_copy_public_link');
+        const r = await apiFetch(`/link/public/${currentFile}`).then(r => r.json());
+        if (r.status === "ok") { copy(r.url, button); button.innerHTML = `<i class="fa-solid fa-link"></i> Public Link Active`; }
+        break;
+      }
+      case "email":
+        trackAction('action_email_start');
+        emailModal?.showModal();
+        break;
+      case "delete":
+        trackAction('action_delete_start');
+        fileToDeleteEl.textContent = currentFile;
+        deleteConfirmBtn.dataset.filename = currentFile;
+        deleteModal?.showModal();
+        break;
+    }
+  });
 
   $("#clipCancel")?.addEventListener("click", () => { clipPanel.classList.add("hidden"); if (trimSlider) { trimSlider.destroy(); trimSlider = null; } statusMsg.textContent = ""; });
   $("#clipGo")?.addEventListener("click", async (e) => {
@@ -768,6 +750,7 @@ actionsPanel.addEventListener("click", async (e) => {
       if (start >= end) return alert("⚠ Invalid range.");
       const btn = e.target.closest("button");
       btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Cutting...`;
+      trackAction('action_clip_success');
       const r = await apiFetch(`/clip/${currentFile}`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ start, end }) }).then(x => x.json());
       if (r.status === "ok") { addFileToGrid(r.clip); activateFile(r.clip); $("#clipCancel").click(); } else { alert("❌ " + r.error); }
       btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-share-nodes"></i> Create & Share Clip`;
@@ -785,7 +768,12 @@ actionsPanel.addEventListener("click", async (e) => {
           btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send`; return;
       }
       const r = await apiFetch("/send_email", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ to, url: linkRes.url }) }).then(x => x.json());
-      $("#emailStatus").textContent = r.status === "ok" ? "✅ Sent!" : "❌ " + (r.error || "Failed");
+      if (r.status === "ok") {
+        trackAction('action_email_success');
+        $("#emailStatus").textContent = "✅ Sent!";
+      } else {
+        $("#emailStatus").textContent = "❌ " + (r.error || "Failed");
+      }
       btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send`;
       if (r.status === "ok") setTimeout(() => { emailModal.close(); $("#emailStatus").textContent = ""; $("#emailTo").value = ""; }, 1500);
   });
@@ -796,6 +784,7 @@ actionsPanel.addEventListener("click", async (e) => {
       const filename = btn.dataset.filename;
       if (!filename) return;
       btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Deleting...`;
+      trackAction('action_delete_success');
       const r = await apiFetch(`/delete/${filename}`, { method: "POST" }).then(r => r.json());
       if (r.status === "ok") {
         statusMsg.textContent = `✅ Recording deleted successfully.`;
@@ -879,42 +868,81 @@ actionsPanel.addEventListener("click", async (e) => {
   });
   $("#mobileWarningClose")?.addEventListener("click", () => { $("#mobileWarningModal")?.close(); });
 
-  // NEW: Feedback Modal Logic
-  // In main.js, find and replace this entire block
-
-// FINAL: Feedback Modal Logic
-feedbackOptions?.addEventListener('click', (e) => {
-  const button = e.target.closest('button[data-feedback]');
-  if (!button) return;
-
-  const feedbackType = button.dataset.feedback;
+  // FINAL: Feedback Modal Logic
+  feedbackOptions?.addEventListener('click', (e) => {
+    const button = e.target.closest('button[data-feedback]');
+    if (!button) return;
+    const feedbackType = button.dataset.feedback;
+    if (typeof gtag === 'function') {
+      gtag('event', 'user_feedback', {
+        'event_category': 'Engagement',
+        'event_label': feedbackType 
+      });
+    }
+    feedbackOptions.innerHTML = `<p style="text-align:center; font-size: 1.2rem;">Thank you for your feedback! 🙏</p>`;
+    localStorage.setItem('hasGivenFeedback', 'true');
+    setTimeout(() => {
+        feedbackModal.close();
+        feedbackOptions.innerHTML = `
+          <button class="btn" data-feedback="work"><i class="fa-solid fa-briefcase"></i> Work / Business</button>
+          <button class="btn" data-feedback="education"><i class="fa-solid fa-graduation-cap"></i> Education / Teaching</button>
+          <button class="btn" data-feedback="personal"><i class="fa-solid fa-user"></i> Personal / Fun</button>
+          <button class="btn" data-feedback="other"><i class="fa-solid fa-circle-question"></i> Something Else</button>
+        `;
+    }, 2000);
+  });
   
-  // Send the result to Google Analytics
-  if (typeof gtag === 'function') {
-    gtag('event', 'user_feedback', {
-      'event_category': 'Engagement',
-      'event_label': feedbackType 
-    });
-  }
-  
-  // Show a "Thank You" message
-  feedbackOptions.innerHTML = `<p style="text-align:center; font-size: 1.2rem;">Thank you for your feedback! 🙏</p>`;
-  
-  // Remember to not ask this user again
-  localStorage.setItem('hasGivenFeedback', 'true');
+  // FINAL: Pro Waitlist Modal Logic
+  showProWaitlistLink?.addEventListener("click", (e) => {
+      e.preventDefault();
+      proWaitlistModal?.showModal();
+  });
 
-  // Close the modal after 2 seconds
-  setTimeout(() => {
-      feedbackModal.close();
-      // Restore original content for the next session
-      feedbackOptions.innerHTML = `
-        <button class="btn" data-feedback="work"><i class="fa-solid fa-briefcase"></i> Work / Business</button>
-        <button class="btn" data-feedback="education"><i class="fa-solid fa-graduation-cap"></i> Education / Teaching</button>
-        <button class="btn" data-feedback="personal"><i class="fa-solid fa-user"></i> Personal / Fun</button>
-        <button class="btn" data-feedback="other"><i class="fa-solid fa-circle-question"></i> Something Else</button>
-      `;
-  }, 2000);
-});
+  proWaitlistCloseBtn?.addEventListener("click", () => {
+      proWaitlistModal?.close();
+  });
+
+  proWaitlistSubmitBtn?.addEventListener("click", async () => {
+      const emailInput = $("#proEmailInput");
+      const statusEl = $("#proWaitlistStatus");
+      const email = emailInput.value.trim();
+      if (!email || !email.includes('@') || !email.includes('.')) {
+          statusEl.textContent = "❌ Please enter a valid email address.";
+          statusEl.className = "error";
+          statusEl.style.display = 'block';
+          return;
+      }
+      proWaitlistSubmitBtn.disabled = true;
+      proWaitlistSubmitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Adding you to the list...`;
+      statusEl.style.display = 'none';
+      try {
+          const res = await apiFetch("/pro-waitlist", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email: email })
+          }).then(r => r.json());
+          if (res.status === "ok") {
+              if(typeof gtag === 'function') {
+                  gtag('event', 'pro_waitlist_signup');
+              }
+              statusEl.textContent = "✅ You're on the list! We'll be in touch soon.";
+              statusEl.className = "success";
+              emailInput.value = "";
+              setTimeout(() => proWaitlistModal.close(), 3000);
+          } else {
+              statusEl.textContent = `❌ ${res.error || "An unknown error occurred."}`;
+              statusEl.className = "error";
+          }
+      } catch (err) {
+          statusEl.textContent = "❌ A network error occurred. Please try again.";
+          statusEl.className = "error";
+      } finally {
+          statusEl.style.display = 'block';
+          proWaitlistSubmitBtn.disabled = false;
+          proWaitlistSubmitBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Notify Me When It's Ready`;
+      }
+  });
+
 
   // ===================================================================
   // INITIALIZATION
